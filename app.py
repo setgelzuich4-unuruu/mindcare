@@ -6,12 +6,6 @@ from google.oauth2.service_account import Credentials
 # --- 2. GOOGLE SHEETS ХОЛБОЛТ ---
 try:
     creds_dict = dict(st.secrets["gcp_service_account"])
-    
-    # Secrets доторх \n болон шинэ мөр шилжилтийг автоматаар форматыг нь засах
-    raw_key = creds_dict["private_key"]
-    if "\\n" in raw_key:
-        creds_dict["private_key"] = raw_key.replace("\\n", "\n")
-        
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
