@@ -7,23 +7,20 @@ import gspread
 st.set_page_config(page_title="FourMind - Сэтгэл Зүйн Дэмжлэг", layout="wide", initial_sidebar_state="expanded")
 
 # --- 2. GOOGLE SHEETS ХОЛБОЛТ ---
-cred_files = ["credentials.json", "credentials.json.json", "credentials.json.txt", "../credentials.json"]
-found_file = next((f for f in cred_files if os.path.exists(f)), None)
-
 try:
-    if found_file:
-        gc = gspread.service_account(filename=found_file)
-    else:
-        gc = gspread.service_account_from_dict(st.secrets["gcp_service_account"])
-        
-    sh = gc.open("MindCare_Data")
-    sheet_users = sh.worksheet("users")
+    # Streamlit Secrets-ээс тохиргоог унших
+    creds_dict = dict(st.secrets["gcp_service_account"])
     
-    try:
-        sheet_tests = sh.worksheet("tests")
-    except:
-        sheet_tests = sh.add_worksheet(title="tests", rows="100", cols="6")
-        sheet_tests.append_row(["Багцын нэр", "Тестийн нэр", "Тайлбар", "Асуултууд", "Зохиогч", "Огноо"])
+    # \n шинэ мөр шилжилтийн PEM алдааг засах
+    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+    
+    # Зөвшөөрлийн хүрээ болон хэрэглэгчийн эрхийг тохируулах
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+    gc = gspread.authorize(credentials)
 except Exception as e:
     st.error(f"Google Sheets холболтын алдаа: {e}")
 
