@@ -22,6 +22,14 @@ try:
 except Exception as e:
     st.error(f"Google Sheets холболтын алдаа: {e}")
 
+# --- SESSION STATE АНХНЫ ТОХИРГОО (try/except-ээс бүрэн гадна бичнэ) ---
+if "current_user" not in st.session_state:
+    st.session_state.current_user = None
+
+if "user_role" not in st.session_state:
+    st.session_state.user_role = None
+
+# --- 4. НЭВТРЭХ БОЛОН БҮРТГҮҮЛЭХ ---
 # --- 4. НЭВТРЭХ БОЛОН БҮРТГҮҮЛЭХ ---
 if st.session_state.current_user is None:
     st.title("🧠 FourMind - Сэтгэл зүй, Эрүүл ирээдүй")
