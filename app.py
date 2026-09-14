@@ -4,20 +4,14 @@ import pandas as pd
 from google.oauth2.service_account import Credentials
 
 # --- 2. GOOGLE SHEETS ХОЛБОЛТ ---
-...
-
-# --- 1. ХУУДАСНЫ ТОХИРГОО ---
-st.set_page_config(page_title="FourMind - Сэтгэл Зүйн Дэмжлэг", layout="wide", initial_sidebar_state="expanded")
-
-# --- 2. GOOGLE SHEETS ХОЛБОЛТ ---
 try:
-    # Streamlit Secrets-ээс тохиргоог унших
     creds_dict = dict(st.secrets["gcp_service_account"])
     
-    # \n шинэ мөр шилжилтийн PEM алдааг засах
-    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
-    
-    # Зөвшөөрлийн хүрээ болон хэрэглэгчийн эрхийг тохируулах
+    # Secrets доторх \n болон шинэ мөр шилжилтийг автоматаар форматыг нь засах
+    raw_key = creds_dict["private_key"]
+    if "\\n" in raw_key:
+        creds_dict["private_key"] = raw_key.replace("\\n", "\n")
+        
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
@@ -26,7 +20,7 @@ try:
     gc = gspread.authorize(credentials)
 except Exception as e:
     st.error(f"Google Sheets холболтын алдаа: {e}")
-
+    
 # --- 3. CSS ДИЗАЙН ---
 st.markdown("""
 <style>
