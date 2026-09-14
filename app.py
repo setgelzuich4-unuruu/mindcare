@@ -42,19 +42,23 @@ if st.session_state.current_user is None:
         if st.button("Нэвтрэх", key="login_submit_btn"):
             if l_name and l_pass:
                 try:
-                    # get_all_values ашиглаж header-ийн алдаанаас сэргийлнэ
                     rows = sheet_users.get_all_values()
-                    
                     user_found = None
+                    
                     if len(rows) > 1:
-                        for r in rows[1:]: # 1-р мөрнөөс бусад мөрүүдээр хайна
-                            # r[0]: Нэр, r[1]: Нууц үг, r[2]: Хэн (Үүрэг)
-                            if len(r) >= 2 and r[0].strip() == l_name.strip() and r[1].strip() == l_pass.strip():
-                                user_found = {
-                                    "Нэр": r[0],
-                                    "Үүрэг": r[2] if len(r) > 2 else "Сурагч"
-                                }
-                                break
+                        for r in rows[1:]:
+                            # Зөвхөн багана хүрэлцээтэй мөрүүдийг шалгана
+                            if len(r) >= 3:
+                                name_val = r[0].strip()
+                                pass_val = r[1].strip()
+                                role_val = r[2].strip() if len(r) > 2 else "Сурагч"
+                                
+                                if name_val == l_name.strip() and pass_val == l_pass.strip():
+                                    user_found = {
+                                        "Нэр": name_val,
+                                        "Үүрэг": role_val
+                                    }
+                                    break
                     
                     if user_found:
                         st.session_state.current_user = user_found.get("Нэр")
@@ -83,8 +87,7 @@ if st.session_state.current_user is None:
                     st.error("Админы нууц код буруу байна!")
                 else:
                     try:
-                        # Скрийншот дээрх 7 баганын дараалалд яг тохируулав:
-                        # [A:Нэр, B:Нууц үг, C:Хэн, D:Овог, E:Утас, F:Хүйс, G:Огноо]
+                        # Дараалал: [A:Нэр, B:Нууц үг, C:Хэн, D:Овог, E:Утас, F:Хүйс, G:Огноо]
                         sheet_users.append_row([
                             first_name, 
                             password, 
