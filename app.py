@@ -1,7 +1,10 @@
 import streamlit as st
-import datetime
-import os
 import gspread
+import pandas as pd
+from google.oauth2.service_account import Credentials
+
+# --- 2. GOOGLE SHEETS ХОЛБОЛТ ---
+...
 
 # --- 1. ХУУДАСНЫ ТОХИРГОО ---
 st.set_page_config(page_title="FourMind - Сэтгэл Зүйн Дэмжлэг", layout="wide", initial_sidebar_state="expanded")
