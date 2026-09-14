@@ -30,7 +30,6 @@ if "user_role" not in st.session_state:
     st.session_state.user_role = None
 
 # --- 4. НЭВТРЭХ БОЛОН БҮРТГҮҮЛЭХ ---
-# --- 4. НЭВТРЭХ БОЛОН БҮРТГҮҮЛЭХ ---
 if st.session_state.current_user is None:
     st.title("🧠 FourMind - Сэтгэл зүй, Эрүүл ирээдүй")
     tab1, tab2 = st.tabs(["🔑 Нэвтрэх", "📝 Шинээр бүртгүүлэх"])
