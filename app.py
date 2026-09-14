@@ -20,7 +20,6 @@ try:
     sheet_users = spreadsheet.worksheet("users")
     sheet_results = spreadsheet.worksheet("results")
     
-    # "tests" нэртэй sheet байгаа гэж үзээд холбов (хэрэв байхгүй бол тусад нь үүсгэнэ)
     try:
         sheet_tests = spreadsheet.worksheet("tests")
     except Exception:
@@ -79,11 +78,22 @@ if st.session_state.current_user is None:
             if l_name and l_pass:
                 try:
                     all_users = sheet_users.get_all_records()
-                    user_found = next((u for u in all_users if str(u.get("Нэр", "")).strip() == l_name.strip() and str(u.get("Нууц үг", "")).strip() == l_pass.strip()), None)
+                    user_found = None
+                    
+                    for u in all_users:
+                        # "Нэр" болон "Нууц үг" багана таарч байгаа эсэхийг шалгах
+                        if str(u.get("Нэр", "")).strip() == l_name.strip() and str(u.get("Нууц үг", "")).strip() == l_pass.strip():
+                            # Google Sheet дээрх баганын нэр "Хэн" эсвэл "Үүрэг" байхыг хоёуланг нь дэмжих
+                            role_val = u.get("Хэн") or u.get("Үүрэг") or "Сурагч"
+                            user_found = {
+                                "Нэр": u.get("Нэр"),
+                                "Үүрэг": role_val
+                            }
+                            break
                     
                     if user_found:
                         st.session_state.current_user = user_found.get("Нэр")
-                        st.session_state.user_role = user_found.get("Үүрэг", "Сурагч")
+                        st.session_state.user_role = user_found.get("Үүрэг")
                         st.success("Амжилттай нэвтэрлээ!")
                         st.rerun()
                     else:
@@ -152,7 +162,7 @@ else:
             st.rerun()
 
     if menu == "🏠 Нүүр":
-        st.title("🌿 Эв нэгдэл, Сэтгэл зүйн төвд морилно уу!")
+        st.title("🌿 Дөрөвдүгээр сургуулийн сэтгэл зүйн хөтчид тавтай морилно уу!")
         st.write("Та зүүн талын цэснээс өөрийн шаардлагатай хэсгийг сонгон үйлчлүүлээрэй.")
 
     elif menu == "🧪 Тестүүд":
@@ -171,7 +181,7 @@ else:
                             try:
                                 if sheet_tests:
                                     sheet_tests.append_row([
-                                        category, test_title, test_desc, test_questions, st.session_state.current_user, str(datetime.now().strftime("%Y-%m-%d"))
+                                        category, test_title, test_desc, test_questions, st.session_state.current_user, datetime.now().strftime("%Y-%m-%d")
                                     ])
                                     st.success("Шинэ тест амжилттай нэмэгдлээ!")
                                     st.rerun()
