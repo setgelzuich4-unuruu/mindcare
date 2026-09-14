@@ -16,13 +16,82 @@ try:
     credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
     gc = gspread.authorize(credentials)
 
-    # Таны Sheet-ийн нэр: FourMind_Data, Worksheet-ийн нэр: users
     spreadsheet = gc.open("FourMind_Data")
     sheet_users = spreadsheet.worksheet("users")
-    sheet_results = spreadsheet.worksheet("results") # Хэрэв үр дүн хадгалдаг хэсэг шаардлагатай бол
-
+    sheet_results = spreadsheet.worksheet("results")
 except Exception as e:
     st.error(f"Google Sheets холболтын алдаа: {e}")
+
+# --- 4. НЭВТРЭХ БОЛОН БҮРТГҮҮЛЭХ ---
+if st.session_state.current_user is None:
+    st.title("🧠 FourMind - Сэтгэл зүй, Эрүүл ирээдүй")
+    tab1, tab2 = st.tabs(["🔑 Нэвтрэх", "📝 Шинээр бүртгүүлэх"])
+    
+    with tab1:
+        st.subheader("Системд нэвтрэх")
+        l_name = st.text_input("Хэрэглэгчийн нэр:", key="login_username")
+        l_pass = st.text_input("Нууц үг:", type="password", key="login_pass_field")
+        
+        if st.button("Нэвтрэх", key="login_submit_btn"):
+            if l_name and l_pass:
+                try:
+                    # get_all_values ашиглаж header-ийн алдаанаас сэргийлнэ
+                    rows = sheet_users.get_all_values()
+                    
+                    user_found = None
+                    if len(rows) > 1:
+                        for r in rows[1:]: # 1-р мөрнөөс бусад мөрүүдээр хайна
+                            # r[0]: Нэр, r[1]: Нууц үг, r[2]: Хэн (Үүрэг)
+                            if len(r) >= 2 and r[0].strip() == l_name.strip() and r[1].strip() == l_pass.strip():
+                                user_found = {
+                                    "Нэр": r[0],
+                                    "Үүрэг": r[2] if len(r) > 2 else "Сурагч"
+                                }
+                                break
+                    
+                    if user_found:
+                        st.session_state.current_user = user_found.get("Нэр")
+                        st.session_state.user_role = user_found.get("Үүрэг", "Сурагч")
+                        st.success("Амжилттай нэвтэрлээ!")
+                        st.rerun()
+                    else:
+                        st.error("Хэрэглэгчийн нэр эсвэл нууц үг буруу байна.")
+                except Exception as e:
+                    st.error(f"Нэвтрэхэд алдаа гарлаа: {e}")
+            else:
+                st.warning("Мэдээллээ бүрэн бөглөнө үү.")
+
+    with tab2:
+        st.subheader("Шинэ бүртгэл үүсгэх")
+        role = st.selectbox("Та хэн бэ?", ["Сурагч", "Анги удирдсан багш", "Асран хамгаалагч", "Админ"], key="reg_role")
+        last_name = st.text_input("Овог:", key="reg_lname")
+        first_name = st.text_input("Нэр:", key="reg_fname")
+        password = st.text_input("Нууц үг үүсгэх:", type="password", key="reg_pass_field")
+        gender = st.selectbox("Хүйс:", ["Эрэгтэй", "Эмэгтэй"], key="reg_gender")
+        phone = st.text_input("Утасны дугаар:", key="reg_phone")
+        
+        if st.button("Бүртгүүлэх", key="reg_submit_btn"):
+            if first_name and password and phone:
+                if role == "Админ" and password != "admin123":
+                    st.error("Админы нууц код буруу байна!")
+                else:
+                    try:
+                        # Скрийншот дээрх 7 баганын дараалалд яг тохируулав:
+                        # [A:Нэр, B:Нууц үг, C:Хэн, D:Овог, E:Утас, F:Хүйс, G:Огноо]
+                        sheet_users.append_row([
+                            first_name, 
+                            password, 
+                            role, 
+                            last_name, 
+                            phone, 
+                            gender, 
+                            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        ])
+                        st.success("Бүртгэл амжилттай боллоо! '🔑 Нэвтрэх' хэсгээр орно уу.")
+                    except Exception as e:
+                        st.error(f"Google Sheets-рүү хадгалахад алдаа гарлаа: {e}")
+            else:
+                st.warning("Мэдээллийг бүрэн бөглөнө үү.")
 
 # --- 3. CSS ДИЗАЙН ---
 st.markdown("""
