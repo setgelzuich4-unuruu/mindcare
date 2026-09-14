@@ -6,6 +6,28 @@ from google.oauth2.service_account import Credentials
 # --- 2. GOOGLE SHEETS ХОЛБОЛТ ---
 try:
     creds_dict = dict(st.secrets["gcp_service_account"])
+    
+    # Private Key форматыг найдвартай засах
+    p_key = creds_dict["private_key"]
+    
+    # Хэрэв \n тэмдэгт текст хэлбэрээр байвал бодит шинэ мөр болгох
+    p_key = p_key.replace("\\n", "\n")
+    
+    # Илүүдэл хоосон зай болон хашилтыг арилгах
+    p_key = p_key.strip().strip('"').strip("'")
+    
+    # Шаардлагатай бол header/footer болон гол түлхүүрийг зөв хэлбэрт оруулах
+    if "-----BEGIN PRIVATE KEY-----" in p_key and "-----END PRIVATE KEY-----" in p_key:
+        header = "-----BEGIN PRIVATE KEY-----"
+        footer = "-----END PRIVATE KEY-----"
+        body = p_key.split(header)[1].split(footer)[0].replace(" ", "").replace("\n", "").replace("\r", "")
+        
+        # 64 тэмдэгт тутамд шинэ мөр авах
+        formatted_lines = [body[i:i+64] for i in range(0, len(body), 64)]
+        p_key = header + "\n" + "\n".join(formatted_lines) + "\n" + footer + "\n"
+    
+    creds_dict["private_key"] = p_key
+
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
