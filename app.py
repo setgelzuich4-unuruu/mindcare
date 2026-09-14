@@ -6,7 +6,6 @@ from google.oauth2.service_account import Credentials
 # --- GOOGLE SHEETS ХОЛБОЛТ ---
 try:
     creds_dict = dict(st.secrets["gcp_service_account"])
-    # \n тэмдэгтийг зөв шинэ мөр болгох
     creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
     
     scopes = [
@@ -15,9 +14,15 @@ try:
     ]
     credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
     gc = gspread.authorize(credentials)
+
+    # Таны Sheet-ийн нэр: FourMind_Data, Worksheet-ийн нэр: users
+    spreadsheet = gc.open("FourMind_Data")
+    sheet_users = spreadsheet.worksheet("users")
+    sheet_results = spreadsheet.worksheet("results") # Хэрэв үр дүн хадгалдаг хэсэг шаардлагатай бол
+
 except Exception as e:
     st.error(f"Google Sheets холболтын алдаа: {e}")
-    
+
 # --- 3. CSS ДИЗАЙН ---
 st.markdown("""
 <style>
