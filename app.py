@@ -102,6 +102,7 @@ if st.session_state.current_user is None:
                     st.error("Админы нууц код буруу байна!")
                 else:
                     try:
+                        # str(datetime.date.today())-ийг datetime.now().strftime("%Y-%m-%d") болгож засав
                         sheet_users.append_row([
                             first_name, 
                             password, 
@@ -109,7 +110,7 @@ if st.session_state.current_user is None:
                             f"{last_name} {first_name}", 
                             phone, 
                             gender, 
-                            str(datetime.date.today())
+                            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         ])
                         st.success("Бүртгэл амжилттай боллоо! '🔑 Нэвтрэх' хэсгээр орно уу.")
                     except Exception as e:
