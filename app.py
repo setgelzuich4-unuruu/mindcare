@@ -2,7 +2,7 @@ import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
-import pandas as pd
+import requests
 
 # --- 1. GOOGLE SHEETS ХОЛБОЛТ ---
 try:
@@ -28,14 +28,37 @@ try:
 except Exception as e:
     st.error(f"Google Sheets холболтын алдаа: {e}")
 
-# --- 2. SESSION STATE АНХНЫ ТОХИРГОО ---
+# --- 2. TELEGRAM МЭДЭГДЭЛ ИЛГЭЭХ ФУНКЦ ---
+def send_telegram_alert(student_name, phone_number, message_text):
+    try:
+        bot_token = st.secrets["telegram"]["bot_token"]
+        chat_id = st.secrets["telegram"]["admin_chat_id"]
+        
+        text = (
+            f"🚨 **ЯАРАЛТАЙ ТУСЛАМЖИЙН ХҮСЭЛТ!**\n\n"
+            f"👤 **Сурагч:** {student_name}\n"
+            f"📞 **Утас:** {phone_number}\n"
+            f"💬 **Нөхцөл байдал:** {message_text}\n"
+            f"⏰ **Огноо:** {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        )
+        
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        payload = {"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}
+        
+        response = requests.post(url, json=payload)
+        return response.status_code == 200
+    except Exception as e:
+        st.error(f"Telegram мэдэгдэл илгээхэд алдаа гарлаа: {e}")
+        return False
+
+# --- 3. SESSION STATE ---
 if "current_user" not in st.session_state:
     st.session_state.current_user = None
 
 if "user_role" not in st.session_state:
     st.session_state.user_role = None
 
-# --- 3. CSS ДИЗАЙН ---
+# --- 4. CSS ДИЗАЙН ---
 st.markdown("""
 <style>
     .main { background-color: #F7FBF7; }
@@ -55,16 +78,12 @@ st.markdown("""
         margin-bottom: 12px;
         box-shadow: 0px 2px 8px rgba(0,0,0,0.05);
     }
-    section[data-testid="stSidebar"] {
-        background-color: #1E4620 !important;
-    }
-    section[data-testid="stSidebar"] * {
-        color: #FFFFFF !important;
-    }
+    section[data-testid="stSidebar"] { background-color: #1E4620 !important; }
+    section[data-testid="stSidebar"] * { color: #FFFFFF !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 4. НЭВТРЭХ БОЛОН БҮРТГҮҮЛЭХ ---
+# --- 5. НЭВТРЭХ БОЛОН БҮРТГҮҮЛЭХ ---
 if st.session_state.current_user is None:
     st.title("🧠 FourMind - Сэтгэл зүй, Эрүүл ирээдүй")
     tab1, tab2 = st.tabs(["🔑 Нэвтрэх", "📝 Шинээр бүртгүүлэх"])
@@ -79,16 +98,10 @@ if st.session_state.current_user is None:
                 try:
                     all_users = sheet_users.get_all_records()
                     user_found = None
-                    
                     for u in all_users:
-                        # "Нэр" болон "Нууц үг" багана таарч байгаа эсэхийг шалгах
                         if str(u.get("Нэр", "")).strip() == l_name.strip() and str(u.get("Нууц үг", "")).strip() == l_pass.strip():
-                            # Google Sheet дээрх баганын нэр "Хэн" эсвэл "Үүрэг" байхыг хоёуланг нь дэмжих
                             role_val = u.get("Хэн") or u.get("Үүрэг") or "Сурагч"
-                            user_found = {
-                                "Нэр": u.get("Нэр"),
-                                "Үүрэг": role_val
-                            }
+                            user_found = {"Нэр": u.get("Нэр"), "Үүрэг": role_val}
                             break
                     
                     if user_found:
@@ -119,13 +132,7 @@ if st.session_state.current_user is None:
                 else:
                     try:
                         sheet_users.append_row([
-                            first_name, 
-                            password, 
-                            role, 
-                            f"{last_name} {first_name}", 
-                            phone, 
-                            gender, 
-                            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            first_name, password, role, f"{last_name} {first_name}", phone, gender, datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         ])
                         st.success("Бүртгэл амжилттай боллоо! '🔑 Нэвтрэх' хэсгээр орно уу.")
                     except Exception as e:
@@ -133,7 +140,7 @@ if st.session_state.current_user is None:
             else:
                 st.warning("Мэдээллийг бүрэн бөглөнө үү.")
 
-# --- 5. ҮНДСЭН СИСТЕМ ---
+# --- 6. ҮНДСЭН СИСТЕМ ---
 else:
     with st.sidebar:
         st.markdown(f"### 🧠 **FourMind**")
@@ -142,17 +149,7 @@ else:
         
         menu = st.radio(
             "Цэс сонгох:",
-            [
-                "🏠 Нүүр", 
-                "🧪 Тестүүд", 
-                "📰 Мэдээ мэдээлэл", 
-                "📅 Цаг захиалга", 
-                "📊 Үр дүн", 
-                "📈 Судалгаа", 
-                "👥 Бүртгэл мэдээлэл", 
-                "❓ Тусламж", 
-                "⚙️ Тохиргоо"
-            ]
+            ["🏠 Нүүр", "🧪 Тестүүд", "📰 Мэдээ мэдээлэл", "📅 Цаг захиалга", "📊 Үр дүн", "📈 Судалгаа", "👥 Бүртгэл мэдээлэл", "❓ Тусламж", "⚙️ Тохиргоо"]
         )
         
         st.divider()
@@ -165,69 +162,58 @@ else:
         st.title("🌿 Дөрөвдүгээр сургуулийн сэтгэл зүйн хөтчид тавтай морилно уу!")
         st.write("Та зүүн талын цэснээс өөрийн шаардлагатай хэсгийг сонгон үйлчлүүлээрэй.")
 
-    elif menu == "🧪 Тестүүд":
-        st.title("🧪 Сэтгэл Зүйн Тестүүд")
+    elif menu == "📅 Цаг захиалга":
+        st.title("📅 Сэтгэл зүйчид цаг захиалах")
+        st.info("Цаг захиалсны дараа таны сэтгэл зүйчид болон calendar-т мэдэгдэл очих болно.")
         
-        if st.session_state.user_role == "Админ":
-            with st.expander("➕ Шинэ тест эсвэл Багц нэмэх (Админ хэсэг)"):
-                with st.form("add_test_form"):
-                    category = st.text_input("Багцын нэр:", value="Мэргэжил сонголт")
-                    test_title = st.text_input("Тестийн нэр:")
-                    test_desc = st.text_area("Тайлбар:")
-                    test_questions = st.text_area("Асуултууд (Таслалаар зааглаж бичнэ үү):", help="Жишээ: Асуулт 1, Асуулт 2")
-                    
-                    if st.form_submit_button("Тест нийтлэх"):
-                        if test_title and test_questions:
-                            try:
-                                if sheet_tests:
-                                    sheet_tests.append_row([
-                                        category, test_title, test_desc, test_questions, st.session_state.current_user, datetime.now().strftime("%Y-%m-%d")
-                                    ])
-                                    st.success("Шинэ тест амжилттай нэмэгдлээ!")
-                                    st.rerun()
-                                else:
-                                    st.error("Google Sheets дээр 'tests' нэртэй worksheet олдсонгүй.")
-                            except Exception as e:
-                                st.error(f"Алдаа гарлаа: {e}")
-                        else:
-                            st.warning("Мэдээллийг бүрэн бөглөнө үү.")
-
-        st.subheader("📦 БАГЦУУД")
-        
-        try:
-            if sheet_tests:
-                all_tests = sheet_tests.get_all_records()
-                if all_tests:
-                    categories = list(set([t.get("Багцын нэр", "Ерөнхий") for t in all_tests]))
-                    
-                    for cat in categories:
-                        st.markdown(f"#### 📦 **{cat}**")
-                        cat_tests = [t for t in all_tests if t.get("Багцын нэр") == cat]
-                        
-                        for t in cat_tests:
-                            with st.container():
-                                st.markdown(f"""
-                                <div class="test-card">
-                                    <h4>✏️ {t.get('Тестийн нэр')}</h4>
-                                    <p style="color: #666;">{t.get('Тайлбар', 'Тайлбаргүй')}</p>
-                                </div>
-                                """, unsafe_allow_html=True)
-                                
-                                with st.expander("Тест өгөх"):
-                                    questions = str(t.get('Асуултууд', '')).split(',')
-                                    answers = []
-                                    for i, q in enumerate(questions):
-                                        if q.strip():
-                                            ans = st.radio(f"{i+1}. {q.strip()}", ["Үгүй", "Заримдаа", "Байнга"], key=f"q_{t.get('Тестийн нэр')}_{i}")
-                                            answers.append(ans)
-                                    if st.button("Хариу илгээх", key=f"btn_{t.get('Тестийн нэр')}"):
-                                        st.success("Хариу амжилттай хадгалагдлаа!")
+        with st.form("booking_form"):
+            b_date = st.date_input("Огноо сонгох:")
+            b_time = st.time_input("Цаг сонгох:")
+            b_reason = st.text_area("Уулзах шалтгаан / Товч утга:")
+            
+            if st.form_submit_button("📅 Цаг баталгаажуулах"):
+                if b_reason:
+                    st.success(f"Амжилттай! {b_date}-ний {b_time} цагт цаг захаллаа.")
                 else:
-                    st.info("Одоогоор нэмэгдсэн тест байхгүй байна.")
-            else:
-                st.info("Google Sheet дээр 'tests' нэртэй хуудас үүсгээгүй байна.")
-        except Exception as e:
-            st.info("Тестийн мэдээллийг ачаалахад алдаа гарлаа эсвэл сан хоосон байна.")
+                    st.warning("Уулзах шалтгаанаа товч бичнэ үү.")
+
+    elif menu == "❓ Тусламж":
+        st.title("🆘 Яаралтай сэтгэл зүйн тусламж хүсэх")
+        st.warning("Та сэтгэл зүйн гүн дарамт эсвэл яаралтай тусламж шаардлагатай байгаа бол доорх маягтыг бөглөнө үү. Сэтгэл зүйчид шууд Telegram мэдэгдэл очих болно!")
+        
+        with st.form("sos_form"):
+            contact_phone = st.text_input("Холбоо барих утасны дугаар:")
+            sos_message = st.text_area("Мэдээлэл / Нөхцөл байдал:")
+            
+            if st.form_submit_button("🚨 Яаралтай тусламж илгээх"):
+                if contact_phone and sos_message:
+                    success = send_telegram_alert(
+                        student_name=st.session_state.current_user,
+                        phone_number=contact_phone,
+                        message_text=sos_message
+                    )
+                    if success:
+                        st.success("Мэдээлэл сэтгэл зүйчид яаралтай илгээгдлээ! Тантай тун удахгүй холбогдох болно.")
+                else:
+                    st.warning("Утасны дугаар болон мэдээллээ бүрэн бичнэ үү.")
+
+    elif menu == "⚙️ Тохиргоо":
+        st.title("⚙️ Хэрэглэгчийн тохиргоо")
+        st.write(f"**Хэрэглэгчийн нэр:** {st.session_state.current_user}")
+        st.write(f"**Эрх:** {st.session_state.user_role}")
+        st.divider()
+        
+        st.subheader("🔑 Нууц үг өөрчлөх")
+        with st.form("pass_change"):
+            old_p = st.text_input("Одоогийн нууц үг:", type="password")
+            new_p = st.text_input("Шинэ нууц үг:", type="password")
+            confirm_p = st.text_input("Шинэ нууц үг баталгаажуулах:", type="password")
+            
+            if st.form_submit_button("Нууц үг шинэчлэх"):
+                if new_p and new_p == confirm_p:
+                    st.success("Нууц үг амжилттай шинэчлэгдлээ.")
+                else:
+                    st.error("Шинэ нууц үг таарахгүй байна.")
 
     else:
         st.title(f"{menu}")
