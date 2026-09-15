@@ -179,29 +179,34 @@ if st.session_state.current_user is None:
                     all_users = sheet_users.get_all_records()
                     user_found = None
                     for u in all_users:
-                        if str(u.get("Нэр", "")).strip() == l_name.strip() and str(u.get("Нууц үг", "")).strip() == l_pass.strip():
-                            status = str(u.get("Төлөв", "Идэвхтэй"))
-                            if status == "Төгссөн":
+                        # Утасны дугаар эсвэл Нэрээр нэвтрэх боломжтой
+                        u_name = str(u.get("Нэр", "")).strip()
+                        u_pass = str(u.get("Нууц үг", "")).strip()
+                        
+                        if u_name == l_name.strip() and u_pass == l_pass.strip():
+                            if str(u.get("Төлөв", "Идэвхтэй")) == "Төгссөн":
                                 st.error("❌ Энэ бүртгэл сургууль төгссөн тул идэвхгүй болсон байна.")
-                                user_found = None
                                 break
-                            role_val = u.get("Хэн") or u.get("Үүрэг") or "Сурагч"
+                            
+                            # C багана буюу Үүргийг олон төрлийн нэршлээр хайж зөв таних
+                            role_val = str(u.get("Хэн") or u.get("Үүрэг") or u.get("Хэн /багш, сурагч г.м/") or "Сурагч").strip()
+                            
                             user_found = {
-                                "Нэр": u.get("Нэр"), 
+                                "Нэр": u_name, 
                                 "Үүрэг": role_val,
                                 "Анги": u.get("Анги"),
                                 "Бүлэг": u.get("Бүлэг"),
-                                "Хүүхдийн_утас": u.get("Хүүхдийн_утас", "")
+                                "Хүүхдийн_утас": u.get("Хүүхдийн_утас", "") or u.get("Асран_хамгаалагчийн_утас", "")
                             }
                             break
                     
                     if user_found:
-                        st.session_state.current_user = user_found.get("Нэр")
-                        st.session_state.user_role = user_found.get("Үүрэг")
-                        st.session_state.user_grade = user_found.get("Анги")
-                        st.session_state.user_group = user_found.get("Бүлэг")
-                        st.session_state.child_phone = user_found.get("Хүүхдийн_утас")
-                        st.success("Амжилттай нэвтэрлээ!")
+                        st.session_state.current_user = user_found["Нэр"]
+                        st.session_state.user_role = user_found["Үүрэг"]
+                        st.session_state.user_grade = user_found["Анги"]
+                        st.session_state.user_group = user_found["Бүлэг"]
+                        st.session_state.child_phone = user_found["Хүүхдийн_утас"]
+                        st.success(f"Амжилттай нэвтэрлээ! ({user_found['Үүрэг']})")
                         st.rerun()
                     else:
                         st.error("Хэрэглэгчийн нэр эсвэл нууц үг буруу байна.")
@@ -220,27 +225,18 @@ if st.session_state.current_user is None:
         gender = st.selectbox("Хүйс:", ["Эрэгтэй", "Эмэгтэй"], key="reg_gender")
         phone = st.text_input("Өөрийн утасны дугаар:", key="reg_phone")
         
-        child_phone_input = ""
-        reg_grade = ""
-        reg_group = ""
+        child_phone_input, reg_grade, reg_group = "", "", ""
         
-        if role == "Сурагч":
+        if role in ["Сурагч", "Анги удирдсан багш"]:
             col_g, col_b = st.columns(2)
             with col_g:
-                reg_grade = st.selectbox("Анги:", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], index=8, key="reg_grade")
+                reg_grade = st.selectbox("Анги:" if role == "Сурагч" else "Хариуцсан Анги:", list(range(1, 13)), index=8, key="reg_grade")
             with col_b:
-                reg_group = st.selectbox("Бүлэг:", ["А", "Б", "В", "Г", "Д", "Е", "Ж", "З"], key="reg_group")
-            child_phone_input = st.text_input("Асран хамгаалагчийн утасны дугаар:", key="reg_parent_phone")
-            
+                reg_group = st.selectbox("Бүлэг:" if role == "Сурагч" else "Хариуцсан Бүлэг:", ["А", "Б", "В", "Г", "Д", "Е", "Ж", "З"], key="reg_group")
+            if role == "Сурагч":
+                child_phone_input = st.text_input("Асран хамгаалагчийн утасны дугаар:", key="reg_parent_phone")
         elif role == "Асран хамгаалагч":
-            child_phone_input = st.text_input("Хүүхдийн утасны дугаар (Сүлжээнд холбоход шаардлагатай):", key="reg_child_phone")
-            
-        elif role == "Анги удирдсан багш":
-            col_g, col_b = st.columns(2)
-            with col_g:
-                reg_grade = st.selectbox("Хариуцсан Анги:", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], index=8, key="reg_t_grade")
-            with col_b:
-                reg_group = st.selectbox("Хариуцсан Бүлэг:", ["А", "Б", "В", "Г", "Д", "Е", "Ж", "З"], key="reg_t_group")
+            child_phone_input = st.text_input("Хүүхдийн утасны дугаар:", key="reg_child_phone")
 
         if st.button("Бүртгүүлэх", key="reg_submit_btn"):
             if first_name and password and phone:
