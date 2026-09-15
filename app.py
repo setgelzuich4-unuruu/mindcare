@@ -176,29 +176,35 @@ if st.session_state.current_user is None:
         if st.button("Нэвтрэх", key="login_submit_btn"):
             if l_name and l_pass:
                 try:
-                    all_users = sheet_users.get_all_records()
+                    # Google Sheet-ийн бүх мөрийг RAW (жагсаалт) байдлаар татаж авна (баганын нэр зөрөхөөс бүрэн хамгаална)
+                    all_rows = sheet_users.get_all_values()
+                    
                     user_found = None
-                    for u in all_users:
-                        # Утасны дугаар эсвэл Нэрээр нэвтрэх боломжтой
-                        u_name = str(u.get("Нэр", "")).strip()
-                        u_pass = str(u.get("Нууц үг", "")).strip()
-                        
-                        if u_name == l_name.strip() and u_pass == l_pass.strip():
-                            if str(u.get("Төлөв", "Идэвхтэй")) == "Төгссөн":
-                                st.error("❌ Энэ бүртгэл сургууль төгссөн тул идэвхгүй болсон байна.")
+                    if len(all_rows) > 1:
+                        # 1-р мөрийг (Header) алгасаад мөр бүрээр хайна
+                        for row in all_rows[1:]:
+                            # Хэрэв мөр хоосон бол алгасна
+                            if not row or len(row) < 3:
+                                continue
+                            
+                            u_name = str(row[0]).strip() # A багана: Нэр
+                            u_pass = str(row[1]).strip() # B багана: Нууц үг
+                            u_role = str(row[2]).strip() # C багана: Хэн / Үүрэг
+                            
+                            if u_name == l_name.strip() and u_pass == l_pass.strip():
+                                u_status = str(row[8]).strip() if len(row) > 8 else "Идэвхтэй"
+                                if u_status == "Төгссөн":
+                                    st.error("❌ Энэ бүртгэл сургууль төгссөн тул идэвхгүй болсон байна.")
+                                    break
+                                
+                                user_found = {
+                                    "Нэр": u_name, 
+                                    "Үүрэг": u_role if u_role else "Сурагч",
+                                    "Анги": row[6] if len(row) > 6 else "",
+                                    "Бүлэг": row[7] if len(row) > 7 else "",
+                                    "Хүүхдийн_утас": row[12] if len(row) > 12 else ""
+                                }
                                 break
-                            
-                            # C багана буюу Үүргийг олон төрлийн нэршлээр хайж зөв таних
-                            role_val = str(u.get("Хэн") or u.get("Үүрэг") or u.get("Хэн /багш, сурагч г.м/") or "Сурагч").strip()
-                            
-                            user_found = {
-                                "Нэр": u_name, 
-                                "Үүрэг": role_val,
-                                "Анги": u.get("Анги"),
-                                "Бүлэг": u.get("Бүлэг"),
-                                "Хүүхдийн_утас": u.get("Хүүхдийн_утас", "") or u.get("Асран_хамгаалагчийн_утас", "")
-                            }
-                            break
                     
                     if user_found:
                         st.session_state.current_user = user_found["Нэр"]
@@ -206,7 +212,7 @@ if st.session_state.current_user is None:
                         st.session_state.user_grade = user_found["Анги"]
                         st.session_state.user_group = user_found["Бүлэг"]
                         st.session_state.child_phone = user_found["Хүүхдийн_утас"]
-                        st.success(f"Амжилттай нэвтэрлээ! ({user_found['Үүрэг']})")
+                        st.success(f"Амжилттай нэвтэрлээ! Таны эрх: {user_found['Үүрэг']}")
                         st.rerun()
                     else:
                         st.error("Хэрэглэгчийн нэр эсвэл нууц үг буруу байна.")
@@ -253,7 +259,6 @@ if st.session_state.current_user is None:
                         st.error(f"Google Sheets-рүү хадгалахад алдаа гарлаа: {e}")
             else:
                 st.warning("Мэдээллийг бүрэн бөглөнө үү.")
-
 # --- 9. ҮНДСЭН СИСТЕМ ---
 else:
     with st.sidebar:
