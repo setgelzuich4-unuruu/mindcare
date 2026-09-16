@@ -35,6 +35,20 @@ try:
         sheet_tests = spreadsheet.add_worksheet(title="tests", rows="100", cols="10")
         sheet_tests.append_row(["Тестийн нэр", "Төрөл", "Асуулт", "Сонголтууд", "Үүсгэсэн огноо"])
 
+    # Мэдээ мэдээллийн хуудас
+    try:
+        sheet_news = spreadsheet.worksheet("news")
+    except Exception:
+        sheet_news = spreadsheet.add_worksheet(title="news", rows="100", cols="5")
+        sheet_news.append_row(["Гарчиг", "Агуулга", "Огноо", "Нийтэлсэн"])
+
+    # Зайн сургалтын хуудас
+    try:
+        sheet_courses = spreadsheet.worksheet("courses")
+    except Exception:
+        sheet_courses = spreadsheet.add_worksheet(title="courses", rows="100", cols="6")
+        sheet_courses.append_row(["Гарчиг", "Таргет", "Хичээлийн_холбоос", "Тайлбар", "Үүсгэсэн_огноо"])
+
 except Exception as e:
     st.error(f"Google Sheets холболтын алдаа: {e}")
 
@@ -58,14 +72,13 @@ def auto_update_grades():
                 if grade > 0 and last_updated_year < academic_year:
                     new_grade = grade + 1
                     if new_grade > 12:
-                        sheet_users.update_cell(idx, 9, "Төгссөн") # 9-р багана: Төлөв
+                        sheet_users.update_cell(idx, 9, "Төгссөн")
                     else:
-                        sheet_users.update_cell(idx, 7, new_grade) # 7-р багана: Анги
-                        sheet_users.update_cell(idx, 10, academic_year) # 10-р багана: Шинэчлэгдсэн_жил
-    except Exception as e:
+                        sheet_users.update_cell(idx, 7, new_grade)
+                        sheet_users.update_cell(idx, 10, academic_year)
+    except Exception:
         pass
 
-# Автомат шинэчлэлтийг ажиллуулах
 auto_update_grades()
 
 # --- 3. TELEGRAM МЭДЭГДЭЛ ИЛГЭЭХ ФУНКЦ ---
@@ -81,10 +94,8 @@ def send_telegram_alert(student_name, phone_number, message_text):
             f"💬 **Нөхцөл байдал:** {message_text}\n"
             f"⏰ **Огноо:** {datetime.now().strftime('%Y-%m-%d %H:%M')}"
         )
-        
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
         payload = {"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}
-        
         response = requests.post(url, json=payload)
         return response.status_code == 200
     except Exception as e:
@@ -107,7 +118,6 @@ def analyze_feeling(text_input, selected_mood):
     else:
         return selected_mood
 
-# --- 5. МАТЕМАТИКАЛ АЛГОРИТМООР КОД ШАЛГАХ & ТҮҮХ ФУНКЦҮҮД ---
 def get_student_info(username):
     try:
         all_users = sheet_users.get_all_records()
@@ -120,33 +130,24 @@ def get_student_info(username):
 
 def calculate_verification_code(phone_num):
     digits_only = ''.join(filter(str.isdigit, str(phone_num)))
-    if len(digits_only) >= 4:
-        last_4 = int(digits_only[-4:])
-    else:
-        last_4 = 1234
-        
+    last_4 = int(digits_only[-4:]) if len(digits_only) >= 4 else 1234
     now = datetime.now()
     day_sum = now.month + now.day
-    generated_code = str((last_4 * 2) + day_sum)
-    return generated_code
+    return str((last_4 * 2) + day_sum)
 
-# --- 6. SESSION STATE ---
+# --- 5. SESSION STATE ---
 if "current_user" not in st.session_state:
     st.session_state.current_user = None
-
 if "user_role" not in st.session_state:
     st.session_state.user_role = None
-
 if "user_grade" not in st.session_state:
     st.session_state.user_grade = None
-
 if "user_group" not in st.session_state:
     st.session_state.user_group = None
-
 if "child_phone" not in st.session_state:
     st.session_state.child_phone = None
 
-# --- 7. CSS ДИЗАЙН ---
+# --- 6. CSS ДИЗАЙН ---
 st.markdown("""
 <style>
     .main { background-color: #F7FBF7; }
@@ -160,10 +161,18 @@ st.markdown("""
     .stButton>button:hover { background-color: #1B5E20 !important; }
     section[data-testid="stSidebar"] { background-color: #1E4620 !important; }
     section[data-testid="stSidebar"] * { color: #FFFFFF !important; }
+    .cert-box {
+        border: 8px double #1B5E20;
+        padding: 30px;
+        text-align: center;
+        background-color: #F9FFF9;
+        border-radius: 12px;
+        margin-top: 15px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 8. НЭВТРЭХ БОЛОН БҮРТГҮҮЛЭХ ---
+# --- 7. НЭВТРЭХ БОЛОН БҮРТГҮҮЛЭХ ---
 if st.session_state.current_user is None:
     st.title("🧠 FourMind - Эрүүл сэтгэл зүй, Эрүүл ирээдүй")
     tab1, tab2 = st.tabs(["🔑 Нэвтрэх", "📝 Шинээр бүртгүүлэх"])
@@ -176,32 +185,39 @@ if st.session_state.current_user is None:
         if st.button("Нэвтрэх", key="login_submit_btn"):
             if l_name and l_pass:
                 try:
-                    all_users = sheet_users.get_all_records()
+                    all_rows = sheet_users.get_all_values()
                     user_found = None
-                    for u in all_users:
-                        if str(u.get("Нэр", "")).strip() == l_name.strip() and str(u.get("Нууц үг", "")).strip() == l_pass.strip():
-                            status = str(u.get("Төлөв", "Идэвхтэй"))
-                            if status == "Төгссөн":
-                                st.error("❌ Энэ бүртгэл сургууль төгссөн тул идэвхгүй болсон байна.")
-                                user_found = None
+                    if len(all_rows) > 1:
+                        for row in all_rows[1:]:
+                            if not row or len(row) < 3:
+                                continue
+                            
+                            u_name = str(row[0]).strip()
+                            u_pass = str(row[1]).strip()
+                            u_role = str(row[2]).strip()
+                            
+                            if u_name == l_name.strip() and u_pass == l_pass.strip():
+                                u_status = str(row[8]).strip() if len(row) > 8 else "Идэвхтэй"
+                                if u_status == "Төгссөн":
+                                    st.error("❌ Энэ бүртгэл сургууль төгссөн тул идэвхгүй болсон байна.")
+                                    break
+                                
+                                user_found = {
+                                    "Нэр": u_name, 
+                                    "Үүрэг": u_role if u_role else "Сурагч",
+                                    "Анги": row[6] if len(row) > 6 else "",
+                                    "Бүлэг": row[7] if len(row) > 7 else "",
+                                    "Хүүхдийн_утас": row[12] if len(row) > 12 else ""
+                                }
                                 break
-                            role_val = u.get("Хэн") or u.get("Үүрэг") or "Сурагч"
-                            user_found = {
-                                "Нэр": u.get("Нэр"), 
-                                "Үүрэг": role_val,
-                                "Анги": u.get("Анги"),
-                                "Бүлэг": u.get("Бүлэг"),
-                                "Хүүхдийн_утас": u.get("Хүүхдийн_утас", "")
-                            }
-                            break
                     
                     if user_found:
-                        st.session_state.current_user = user_found.get("Нэр")
-                        st.session_state.user_role = user_found.get("Үүрэг")
-                        st.session_state.user_grade = user_found.get("Анги")
-                        st.session_state.user_group = user_found.get("Бүлэг")
-                        st.session_state.child_phone = user_found.get("Хүүхдийн_утас")
-                        st.success("Амжилттай нэвтэрлээ!")
+                        st.session_state.current_user = user_found["Нэр"]
+                        st.session_state.user_role = user_found["Үүрэг"]
+                        st.session_state.user_grade = user_found["Анги"]
+                        st.session_state.user_group = user_found["Бүлэг"]
+                        st.session_state.child_phone = user_found["Хүүхдийн_утас"]
+                        st.success(f"Амжилттай нэвтэрлээ! Таны эрх: {user_found['Үүрэг']}")
                         st.rerun()
                     else:
                         st.error("Хэрэглэгчийн нэр эсвэл нууц үг буруу байна.")
@@ -220,27 +236,18 @@ if st.session_state.current_user is None:
         gender = st.selectbox("Хүйс:", ["Эрэгтэй", "Эмэгтэй"], key="reg_gender")
         phone = st.text_input("Өөрийн утасны дугаар:", key="reg_phone")
         
-        child_phone_input = ""
-        reg_grade = ""
-        reg_group = ""
+        child_phone_input, reg_grade, reg_group = "", "", ""
         
-        if role == "Сурагч":
+        if role in ["Сурагч", "Анги удирдсан багш"]:
             col_g, col_b = st.columns(2)
             with col_g:
-                reg_grade = st.selectbox("Анги:", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], index=8, key="reg_grade")
+                reg_grade = st.selectbox("Анги:" if role == "Сурагч" else "Хариуцсан Анги:", list(range(1, 13)), index=8, key="reg_grade")
             with col_b:
-                reg_group = st.selectbox("Бүлэг:", ["А", "Б", "В", "Г", "Д", "Е", "Ж", "З"], key="reg_group")
-            child_phone_input = st.text_input("Асран хамгаалагчийн утасны дугаар:", key="reg_parent_phone")
-            
+                reg_group = st.selectbox("Бүлэг:" if role == "Сурагч" else "Хариуцсан Бүлэг:", ["А", "Б", "В", "Г", "Д", "Е", "Ж", "З"], key="reg_group")
+            if role == "Сурагч":
+                child_phone_input = st.text_input("Асран хамгаалагчийн утасны дугаар:", key="reg_parent_phone")
         elif role == "Асран хамгаалагч":
-            child_phone_input = st.text_input("Хүүхдийн утасны дугаар (Сүлжээнд холбоход шаардлагатай):", key="reg_child_phone")
-            
-        elif role == "Анги удирдсан багш":
-            col_g, col_b = st.columns(2)
-            with col_g:
-                reg_grade = st.selectbox("Хариуцсан Анги:", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], index=8, key="reg_t_grade")
-            with col_b:
-                reg_group = st.selectbox("Хариуцсан Бүлэг:", ["А", "Б", "В", "Г", "Д", "Е", "Ж", "З"], key="reg_t_group")
+            child_phone_input = st.text_input("Хүүхдийн утасны дугаар:", key="reg_child_phone")
 
         if st.button("Бүртгүүлэх", key="reg_submit_btn"):
             if first_name and password and phone:
@@ -258,24 +265,22 @@ if st.session_state.current_user is None:
             else:
                 st.warning("Мэдээллийг бүрэн бөглөнө үү.")
 
-# --- 9. ҮНДСЭН СИСТЕМ ---
+# --- 8. ҮНДСЭН СИСТЕМ ---
 else:
     with st.sidebar:
-        # ЛОГО ЗУРАГ БАЙВАЛ ХАРУУЛАХ
         if os.path.exists("logo.png"):
             st.image("logo.png", width=120)
         else:
             st.markdown("🏫", unsafe_allow_html=True)
 
-        st.markdown(f"### **FourMind**")
+        st.markdown("### **FourMind**")
         st.caption(f"👤 **{st.session_state.current_user}** ({st.session_state.user_role})")
         if st.session_state.user_grade and st.session_state.user_group:
             st.caption(f"🏫 **Анги бүлэг:** {st.session_state.user_grade}-{st.session_state.user_group}")
         st.divider()
         
-        menu_items = ["🏠 Нүүр", "🧪 Тестүүд", "📝 Өдрийн мэдрэмж", "📰 Мэдээ мэдээлэл", "📅 Цаг захиалга", "📊 Үр дүн", "📈 Судалгаа болон Анализ"]
+        menu_items = ["🏠 Нүүр", "🧪 Тестүүд", "🎓 Зайн сургалт", "📝 Өдрийн мэдрэмж", "📰 Мэдээ мэдээлэл", "📅 Цаг захиалга", "📊 Үр дүн", "📈 Судалгаа болон Анализ"]
         
-        # Асран хамгаалагч нэвтэрвэл хүүхдийн цэс гарна
         if st.session_state.user_role == "Асран хамгаалагч":
             menu_items.append("👶 Миний хүүхэд")
             
@@ -307,16 +312,111 @@ else:
                 st.title("🏫")
         with col_title:
             st.title("Дөрөвдүгээр сургуулийн цахим сэтгэл зүйн үйлчилгээнд тавтай морилно уу!")
-            
         st.write("Та зүүн талын цэснээс өөрт хэрэгцээтэй хэсгийг сонгон үйлчлүүлээрэй.")
+
+    # --- 🎓 ЗАЙН СУРГАЛТ БОЛОН БАТЛАМЖ ХЭСЭГ ---
+    elif menu == "🎓 Зайн сургалт":
+        st.title("🎓 Зайн сэтгэл зүйн сургалтууд & Батламж")
+        
+        # Админ сургалт оруулах хэсэг
+        if st.session_state.user_role == "Админ":
+            with st.expander("➕ Шинэ зайн сургалт нэмэх (Админ хэсэг)"):
+                c_title = st.text_input("Сургалтын сэдэв / Гарчиг:")
+                c_target = st.selectbox("Хэнд зориулсан:", ["Бүгдэд", "Сурагч", "Асран хамгаалагч"])
+                c_link = st.text_input("Видео хичээлийн линк (YouTube болон бусад):", placeholder="https://www.youtube.com/watch?v=...")
+                c_desc = st.text_area("Сургалтын тайлбар / Зорилго:")
+                
+                if st.button("💾 Сургалт хадгалах"):
+                    if c_title and c_link:
+                        try:
+                            sheet_courses.append_row([c_title, c_target, c_link, c_desc, datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
+                            st.success("✅ Шинэ зайн сургалт амжилттай нэмэгдлээ!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Алдаа гарлаа: {e}")
+                    else:
+                        st.warning("Гарчиг болон линкийг заавал оруулна уу.")
+            st.divider()
+
+        # Сургалтуудыг харуулах
+        try:
+            courses = sheet_courses.get_all_records()
+            filtered_courses = [c for c in courses if c.get("Таргет") in ["Бүгдэд", st.session_state.user_role]]
+            
+            if filtered_courses:
+                for idx, c in enumerate(filtered_courses):
+                    st.subheader(f"📖 {c.get('Гарчиг')} ({c.get('Таргет')}-д зориулсан)")
+                    st.write(c.get("Тайлбар"))
+                    
+                    link = c.get("Хичээлийн_холбоос", "")
+                    if "youtube.com" in link or "youtu.be" in link:
+                        st.video(link)
+                    else:
+                        st.markdown(f"🔗 [Энд дарж хичээл үзнэ үү]({link})")
+                    
+                    # Батламж авах хэсэг
+                    if st.button(f"📜 'Course #{idx+1}' Сургалт дуусгаж Батламж авах", key=f"cert_btn_{idx}"):
+                        today_str = datetime.now().strftime("%Y-%m-%d")
+                        st.balloons()
+                        st.markdown(f"""
+                        <div class="cert-box">
+                            <h2>🎓 БАТЛАМЖ</h2>
+                            <p>Сэтгэл зүйн зайн сургалт амжилттай дүүргэсэн тул</p>
+                            <h3><b>{st.session_state.current_user}</b></h3>
+                            <p>түүнд <b>"{c.get('Гарчиг')}"</b> сэдэвт сэтгэл зүйн сургалтыг амжилттай суралцаж дүүргэснийг батлан эгүүлэв.</p>
+                            <br>
+                            <p><b>Огноо:</b> {today_str}</p>
+                            <p><b>Дөрөвдүгээр Сургуулийн Сэтгэл Зүйн Төв</b></p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    st.markdown("---")
+            else:
+                st.info("Одоогоор идэвхтэй зайн сургалт байхгүй байна.")
+        except Exception as e:
+            st.error(f"Сургалтын мэдээлэл авахад алдаа гарлаа: {e}")
+
+    # --- 📰 МЭДЭЭ МЭДЭЭЛЭЛ ХЭСЭГ ---
+    elif menu == "📰 Мэдээ мэдээлэл":
+        st.title("📰 Зөвлөмж & Мэдээ мэдээлэл")
+
+        if st.session_state.user_role == "Админ":
+            with st.expander("➕ Шинэ мэдээ, зөвлөмж нэмэх (Админ хэсэг)"):
+                news_title = st.text_input("Мэдээний гарчиг:")
+                news_content = st.text_area("Агуулга / Сэтгэл зүйн зөвлөмж:")
+                
+                if st.button("Шууд нийтлэх"):
+                    if news_title and news_content:
+                        try:
+                            now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+                            sheet_news.append_row([news_title, news_content, now_str, st.session_state.current_user])
+                            st.success("Мэдээ амжилттай нийтлэгдлээ!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Алдаа гарлаа: {e}")
+                    else:
+                        st.warning("Гарчиг болон агуулгыг бүрэн бөглөнө үү.")
+            st.divider()
+
+        try:
+            news_list = sheet_news.get_all_records()
+            if news_list:
+                for n in reversed(news_list):
+                    with st.container():
+                        st.subheader(f"📌 {n.get('Гарчиг')}")
+                        st.caption(f"🗓 Огноо: {n.get('Огноо')} | 👤 Нийтэлсэн: {n.get('Нийтэлсэн')}")
+                        st.write(n.get('Агуулга'))
+                        st.markdown("---")
+            else:
+                st.info("Одоогоор нийтлэгдсэн мэдээ, зөвлөмж байхгүй байна.")
+        except Exception as e:
+            st.error(f"Мэдээлэл татахад алдаа гарлаа: {e}")
 
     # --- 👶 АСРАН ХАМГААЛАГЧИД ЗОРИУЛСАН "МИНИЙ ХҮҮХЭД" ХЭСЭГ ---
     elif menu == "👶 Миний хүүхэд":
         st.title("👶 Хүүхдийн сэтгэл зүйн төлөв байдал & Анализ")
-        
         child_phone = st.session_state.child_phone
         if not child_phone:
-            st.warning("⚠️ Таны бүртгэлд хүүхдийн утасны дугаар холбогдоогүй байна. '⚙️ Тохиргоо' хэсэгт тохируулна уу.")
+            st.warning("⚠️ Таны бүртгэлд хүүхдийн утасны дугаар холбогдоогүй байна.")
         else:
             try:
                 all_users = sheet_users.get_all_records()
@@ -333,7 +433,6 @@ else:
                     c_group = child_user.get("Бүлэг")
                     
                     st.success(f"👨‍👩‍👧 **Холбогдсон хүүхэд:** {c_name} ({c_grade}-{c_group} бүлэг)")
-                    
                     tab_c_feel, tab_c_test = st.tabs(["📊 Мэдрэмжийн төлөв", "📝 Тестийн үр дүн"])
                     
                     with tab_c_feel:
@@ -366,7 +465,7 @@ else:
     # --- ⚙️ АДМИНЫ ТЕСТ УДИРДЛАГА ХЭСЭГ ---
     elif menu == "⚙️ Тест удирдлага (Админ)":
         st.title("⚙️ Админы тест болон асуулга удирдах хэсэг")
-        st.info("Энд админ эсвэл сэтгэл зүйч шинэ тест оруулах бөгөөд оруулангуут сурагчдын '🧪 Тестүүд' хэсэгт автоматаар харагдах болно.")
+        st.info("Энд админ шинэ тест оруулах бөгөөд оруулангуут '🧪 Тестүүд' хэсэгт автоматаар харагдана.")
         
         tab_add, tab_list = st.tabs(["➕ Шинэ тест нэмэх", "📋 Үүсгэсэн тестүүдийн жагсаалт"])
         
@@ -383,7 +482,7 @@ else:
                             sheet_tests.append_row([
                                 t_name, t_type, t_question, t_options, datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             ])
-                            st.success("✅ Шинэ тест амжилттай хадгалагдлаа! Сурагчид бөглөх боломжтой боллоо.")
+                            st.success("✅ Шинэ тест амжилттай хадгалагдлаа!")
                         except Exception as e:
                             st.error(f"Хадгалахад алдаа гарлаа: {e}")
                     else:
@@ -400,10 +499,9 @@ else:
             except Exception as e:
                 st.error(f"Мэдээлэл уншихад алдаа гарлаа: {e}")
 
-    # --- 🧪 ТЕСТҮҮД ХЭСЭГ (СУРАГЧ БӨГЛӨХ) ---
+    # --- 🧪 ТЕСТҮҮД ХЭСЭГ ---
     elif menu == "🧪 Тестүүд":
         st.title("🧪 Сэтгэл зүйн онлайнаар өгөх тестүүд")
-        
         all_tests = []
         try:
             all_tests = sheet_tests.get_all_records()
@@ -415,7 +513,6 @@ else:
         else:
             test_names = list(set([t.get("Тестийн нэр") for t in all_tests if t.get("Тестийн нэр")]))
             selected_test_name = st.selectbox("Бөглөх тестээ сонгоно уу:", test_names)
-            
             current_test_questions = [t for t in all_tests if t.get("Тестийн нэр") == selected_test_name]
             
             if current_test_questions:
@@ -430,7 +527,6 @@ else:
                         answers[f"q_{idx}"] = st.radio(f"{idx+1}. {q_text}", opts, key=f"q_ans_{idx}")
                     
                     st.divider()
-                    
                     user_code_input = ""
                     if "🔒 Заавал" in test_type:
                         st.info("💡 Энэ бол заавал бөглөх тест тул баталгаажуулах кодоо оруулна уу.")
@@ -446,31 +542,18 @@ else:
 
                         if "🔒 Заавал" in test_type:
                             expected_code = calculate_verification_code(user_phone)
-                            
                             if user_code_input.strip() != expected_code:
-                                st.error("❌ Баталгаажуулах код буруу байна! Таньд олгосон алгоритм кодоо шалгана уу.")
+                                st.error("❌ Баталгаажуулах код буруу байна!")
                             else:
                                 sheet_results.append_row([
-                                    st.session_state.current_user,
-                                    selected_test_name,
-                                    str(answers),
-                                    "Баталгаажсан",
-                                    "Кодоор шалгагдсан",
-                                    user_grade,
-                                    user_group,
-                                    datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                    st.session_state.current_user, selected_test_name, str(answers),
+                                    "Баталгаажсан", "Кодоор шалгагдсан", user_grade, user_group, datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                                 ])
                                 st.success("✅ Тест амжилттай баталгаажиж хадгалагдлаа!")
                         else:
                             sheet_results.append_row([
-                                st.session_state.current_user,
-                                selected_test_name,
-                                str(answers),
-                                "Хэвийн",
-                                "Нээлттэй сорил",
-                                user_grade,
-                                user_group,
-                                datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                st.session_state.current_user, selected_test_name, str(answers),
+                                "Хэвийн", "Нээлттэй сорил", user_grade, user_group, datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             ])
                             st.success("✅ Сэтгэл зүйн тест амжилттай хадгалагдлаа!")
 
@@ -495,12 +578,8 @@ else:
                         user_group = str(student_info.get("Бүлэг", ""))
                         
                         sheet_feelings.append_row([
-                            st.session_state.current_user,
-                            selected_mood,
-                            analyzed_state,
-                            user_grade,
-                            user_group,
-                            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            st.session_state.current_user, selected_mood, analyzed_state,
+                            user_grade, user_group, datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         ])
                         st.success(f"Амжилттай хадгалагдлаа! Таны өнөөдрийн голлон мэдэрсэн мэдрэмж: **{analyzed_state}** байна.")
                     except Exception as e:
@@ -509,7 +588,6 @@ else:
     # --- 📈 СУДАЛГАА БОЛОН АНАЛИЗ ---
     elif menu == "📈 Судалгаа болон Анализ":
         st.title("📈 Сэтгэл зүй & Мэдрэмжийн нэгдсэн статистик")
-        
         is_teacher = (st.session_state.user_role == "Анги удирдсан багш")
         t_grade = str(st.session_state.user_grade or "")
         t_group = str(st.session_state.user_group or "")
@@ -527,18 +605,15 @@ else:
                     records = sheet_feelings.get_all_records()
                     if records:
                         df = pd.DataFrame(records)
-                        
                         if is_teacher and "Анги" in df.columns and "Бүлэг" in df.columns:
                             df = df[(df["Анги"].astype(str) == t_grade) & (df["Бүлэг"].astype(str) == t_group)]
-                        
                         if not df.empty and "Шинжилсэн_төлөв" in df.columns:
                             st.subheader(f"📊 Мэдрэмжийн харьцаа ({len(df)} бичлэг)")
-                            feeling_counts = df["Шинжилсэн_төлөв"].value_counts()
-                            st.bar_chart(feeling_counts)
+                            st.bar_chart(df["Шинжилсэн_төлөв"].value_counts())
                         else:
-                            st.warning("Тухайн ангид хамаарах мэдрэмжийн дата одоогоор байхгүй байна.")
+                            st.warning("Тухайн ангид хамаарах дата одоогоор байхгүй байна.")
                     else:
-                        st.write("Одоогоор хадгалагдсан мэдрэмжийн дата байхгүй байна.")
+                        st.write("Одоогоор мэдрэмжийн дата байхгүй байна.")
                 except Exception as e:
                     st.error(f"Алдаа: {e}")
                     
@@ -547,43 +622,45 @@ else:
                 res_records = sheet_results.get_all_records()
                 if res_records:
                     df_res = pd.DataFrame(res_records)
-                    
                     if is_teacher and "Анги" in df_res.columns and "Бүлэг" in df_res.columns:
                         df_res = df_res[(df_res["Анги"].astype(str) == t_grade) & (df_res["Бүлэг"].astype(str) == t_group)]
-                        
                     if not df_res.empty:
                         st.subheader("📋 Бөглөгдсөн тестүүдийн жагсаалт")
                         st.dataframe(df_res)
                     else:
                         st.warning("Тухайн ангид бөглөгдсөн тестийн үр дүн байхгүй байна.")
                 else:
-                    st.write("Бөглөсөн тестийн үр дүн одоогоор байхгүй байна.")
+                    st.write("Бөглөсөн тестийн үр дүн байхгүй байна.")
             except Exception as e:
                 st.error(f"Алдаа: {e}")
 
     # --- 👥 БҮРТГЭЛ МЭДЭЭЛЭЛ ---
     elif menu == "👥 Бүртгэл мэдээлэл":
         st.title("👥 Сурагчдын бүртгэл & Ангийн жагсаалт")
-        try:
-            all_users = sheet_users.get_all_records()
-            if all_users:
-                df_u = pd.DataFrame(all_users)
-                
-                if st.session_state.user_role == "Анги удирдсан багш":
-                    t_grade = str(st.session_state.user_grade or "")
-                    t_group = str(st.session_state.user_group or "")
-                    if "Анги" in df_u.columns and "Бүлэг" in df_u.columns:
-                        df_u = df_u[(df_u["Анги"].astype(str) == t_grade) & (df_u["Бүлэг"].astype(str) == t_group)]
-                        st.subheader(f"🏫 Таны {t_grade}-{t_group} ангийн сурагчдын жагсаалт:")
-                
-                if "Нууц үг" in df_u.columns:
-                    df_u = df_u.drop(columns=["Нууц үг"])
-                    
-                st.dataframe(df_u)
-            else:
-                st.info("Бүртгэлтэй хэрэглэгч байхгүй байна.")
-        except Exception as e:
-            st.error(f"Мэдээлэл авахад алдаа гарлаа: {e}")
+        if st.session_state.user_role in ["Админ", "Анги удирдсан багш"]:
+            try:
+                all_users = sheet_users.get_all_records()
+                if all_users:
+                    df_u = pd.DataFrame(all_users)
+                    if st.session_state.user_role == "Анги удирдсан багш":
+                        t_grade = str(st.session_state.user_grade or "")
+                        t_group = str(st.session_state.user_group or "")
+                        if "Анги" in df_u.columns and "Бүлэг" in df_u.columns:
+                            df_u = df_u[(df_u["Анги"].astype(str) == t_grade) & (df_u["Бүлэг"].astype(str) == t_group)]
+                            st.subheader(f"🏫 Таны {t_grade}-{t_group} ангийн сурагчдын жагсаалт:")
+                    else:
+                        st.subheader("🏫 Системийн нэгдсэн хэрэглэгчдийн жагсаалт:")
+
+                    cols_to_drop = [c for c in ["Нууц үг"] if c in df_u.columns]
+                    if cols_to_drop:
+                        df_u = df_u.drop(columns=cols_to_drop)
+                    st.dataframe(df_u)
+                else:
+                    st.info("Бүртгэлтэй хэрэглэгч байхгүй байна.")
+            except Exception as e:
+                st.error(f"Мэдээлэл авахад алдаа гарлаа: {e}")
+        else:
+            st.warning("🔒 Энэ хэсэгт зөвхөн Сургуулийн админ болон Анги удирдсан багш нар нэвтрэх боломжтой.")
 
     # --- 📅 ЦАГ ЗАХИАЛГА ---
     elif menu == "📅 Цаг захиалга":
@@ -592,13 +669,13 @@ else:
             b_date = st.date_input("Огноо сонгох:")
             b_time = st.time_input("Цаг сонгох:")
             b_reason = st.text_area("Уулзах шалтгаан / Товч утга:")
-            if st.form_submit_button("📅 Цагаа баталгаажуулсны дараа таны цагийн мэдээлэл сэтгэл зүйчид мэдэгдлээр очих болно"):
+            if st.form_submit_button("📅 Цагаа баталгаажуулах"):
                 st.success(f"Амжилттай! {b_date}-ний {b_time} цагт цаг захиаллаа.")
 
     # --- ❓ ТУСЛАМЖ ---
     elif menu == "❓ Тусламж":
         st.title("🆘 Одоо л сэтгэлдээ туслах цаг")
-        st.warning("Яаралтай мэргэжлийн дэмжлэг шаардлагатай үед доорх маягтыг бөглөнө үү. Таны хүсэлт сэтгэл зүйчид шууд мэдэгдлээр хүрэх болно!")
+        st.warning("Яаралтай мэргэжлийн дэмжлэг шаардлагатай үед доорх маягтыг бөглөнө үү.")
         
         with st.form("sos_form"):
             contact_phone = st.text_input("Холбоо барих утасны дугаар:")
@@ -644,14 +721,10 @@ else:
                         
                         if user_row_idx:
                             sheet_users.update_cell(user_row_idx, 2, new_p)
-                            st.success("✅ Нууц үг амжилттай шинэчлэгдэж Google Sheets дээр хадгалагдлаа.")
+                            st.success("✅ Нууц үг амжилттай шинэчлэгдлээ.")
                         else:
                             st.error("❌ Одоогийн нууц үг буруу байна!")
                     except Exception as e:
                         st.error(f"Алдаа гарлаа: {e}")
                 else:
-                    st.error("❌ Шинэ нууц үг болон баталгаажуулах нууц үг таарахгүй байна.")
-
-    else:
-        st.title(f"{menu}")
-        st.info("Энэ хэсгийн контент бэлтгэгдэж байна...")
+                    st.error("❌ Шинэ нууц үг зөрж байна.")
