@@ -709,37 +709,78 @@ else:
     # --- 📅 ЦАГ ЗАХИАЛГА ---
     elif menu == "📅 Цаг захиалга":
         st.title("📅 Сэтгэл зүйн ганцаарчилсан зөвлөгөөний цаг захиалах")
-        with st.form("booking_form"):
-            b_date = st.date_input("Огноо сонгох:")
-            b_time = st.time_input("Цаг сонгох:")
-            b_reason = st.text_area("Уулзах шалтгаан / Товч утга:")
+        
+        # 1. Google Sheet-ээс бүх боломжит өдөр, цагийг унших
+        all_schedules = []
+        try:
+            sched_records = sheet_schedule.get_all_records()
+            for r in sched_records:
+                day = str(r.get("Боломжит_өдөр", "")).strip()
+                time_slot = str(r.get("Боломжит_цаг", "")).strip()
+                if day and time_slot:
+                    all_schedules.append((day, time_slot))
+        except Exception as e:
+            st.error(f"Цагийн хуваарь татахад алдаа гарлаа: {e}")
+
+        # 2. Нэгэнт захиалагдсан өдөр, цагуудыг авч шүүх
+        booked_slots = set()
+        try:
+            booking_records = sheet_bookings.get_all_records()
+            for b in booking_records:
+                b_day = str(b.get("Огноо", "")).strip()
+                b_time = str(b.get("Цаг", "")).strip()
+                if b_day and b_time:
+                    booked_slots.add((b_day, b_time))
+        except Exception as e:
+            pass # Захиалгын хуудас хоосон байвал алдаа мэдээлэхгүй
+
+        # 3. Боломжит цагуудаас аль хэдийн захиалагдсан цагуудыг хасах
+        available_slots = [slot for slot in all_schedules if slot not in booked_slots]
+
+        if not available_slots:
+            st.warning("⚠️ Одоогоор боломжит цагийн хуваарь байхгүй эсвэл бүх цаг захиалагдсан байна.")
+        else:
+            # Боломжтой өдрүүдийг ялгах
+            unique_days = sorted(list(set([slot[0] for slot in available_slots])))
             
-            if st.form_submit_button("📅 Цаг захиалах"):
-                if b_reason:
-                    try:
-                        u_info = get_student_info(st.session_state.current_user)
-                        u_grade = f"{u_info.get('Анги', '')}-{u_info.get('Бүлэг', '')}"
-                        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        
-                        # 1. Google Sheets-д хадгалах
-                        sheet_bookings.append_row([
-                            st.session_state.current_user,
-                            str(b_date),
-                            str(b_time),
-                            b_reason,
-                            u_grade,
-                            now_str
-                        ])
-                        
-                        # 2. Telegram руу Сэтгэл зүйчид мэдэгдэл илгээх
-                        msg = f"📅 **ШИНЭ ЦАГ ЗАХИАЛГА!**\n\n👤 **Хэрэглэгч:** {st.session_state.current_user} ({u_grade})\n📆 **Захиалсан огноо:** {b_date}\n⏰ **Цаг:** {b_time}\n📝 **Шалтгаан:** {b_reason}"
-                        send_telegram_alert(st.session_state.current_user, u_info.get("Утас", "Бүртгэлгүй"), msg)
-                        
-                        st.success(f"Амжилттай! Таны захиалсан {b_date}-ний {b_time} цагийн хүсэлт сэтгэл зүйчид илгээгдлээ.")
-                    except Exception as e:
-                        st.error(f"Алдаа гарлаа: {e}")
-                else:
-                    st.warning("Уулзах шалтгаанаа товч бичнэ үү.")
+            with st.form("booking_form"):
+                st.subheader("Сэтгэл зүйчийн боломжтой цагуудаас сонгох:")
+                
+                selected_day = st.selectbox("Боломжит өдөр сонгох:", unique_days)
+                
+                # Сонгосон өдөрт тохирох, БОЛОМЖТОЙ (захиалагдаагүй) цагуудыг харуулах
+                day_times = [slot[1] for slot in available_slots if slot[0] == selected_day]
+                selected_time = st.selectbox("Боломжит цаг сонгох:", day_times)
+                
+                b_reason = st.text_area("Уулзах шалтгаан / Товч утга:", placeholder="Уулзах болсон шалтгаанаа товч бичнэ үү...")
+                
+                if st.form_submit_button("📅 Цаг захиалах"):
+                    if b_reason:
+                        try:
+                            u_info = get_student_info(st.session_state.current_user)
+                            u_grade = f"{u_info.get('Анги', '')}-{u_info.get('Бүлэг', '')}"
+                            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            
+                            # 1. Google Sheets дээр захиалга хадгалах
+                            sheet_bookings.append_row([
+                                st.session_state.current_user,
+                                str(selected_day),
+                                str(selected_time),
+                                b_reason,
+                                u_grade,
+                                now_str
+                            ])
+                            
+                            # 2. Telegram дээр мэдэгдэл очих
+                            msg = f"📅 **ШИНЭ ЦАГ ЗАХИАЛГА!**\n\n👤 **Хэрэглэгч:** {st.session_state.current_user} ({u_grade})\n📆 **Захиалсан өдөр:** {selected_day}\n⏰ **Цаг:** {selected_time}\n📝 **Шалтгаан:** {b_reason}"
+                            send_telegram_alert(st.session_state.current_user, u_info.get("Утас", "Бүртгэлгүй"), msg)
+                            
+                            st.success(f"Амжилттай! Таны захиалсан {selected_day}-ний {selected_time} цагийн хүсэлт баталгаажлаа.")
+                            st.rerun() # Хуудсыг шинэчилж, сонгосон цагийг сонголтоос шууд хасна
+                        except Exception as e:
+                            st.error(f"Алдаа гарлаа: {e}")
+                    else:
+                        st.warning("Уулзах шалтгаанаа товч бичнэ үү.")
 
     # --- ❓ ТУСЛАМЖ ---
     elif menu == "❓ Тусламж":
