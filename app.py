@@ -48,7 +48,11 @@ try:
     except Exception:
         sheet_courses = spreadsheet.add_worksheet(title="courses", rows="100", cols="6")
         sheet_courses.append_row(["Гарчиг", "Таргет", "Хичээлийн_холбоос", "Тайлбар", "Үүсгэсэн_огноо"])
-
+    try:
+        sheet_bookings = spreadsheet.worksheet("bookings")
+    except Exception:
+        sheet_bookings = spreadsheet.add_worksheet(title="bookings", rows="100", cols="7")
+        sheet_bookings.append_row(["Хэрэглэгч", "Огноо", "Цаг", "Уулзах_шалтгаан", "Анги", "Бүртгэсэн_огноо"])
 except Exception as e:
     st.error(f"Google Sheets холболтын алдаа: {e}")
 
@@ -669,8 +673,33 @@ else:
             b_date = st.date_input("Огноо сонгох:")
             b_time = st.time_input("Цаг сонгох:")
             b_reason = st.text_area("Уулзах шалтгаан / Товч утга:")
-            if st.form_submit_button("📅 Цагаа баталгаажуулах"):
-                st.success(f"Амжилттай! {b_date}-ний {b_time} цагт цаг захиаллаа.")
+            
+            if st.form_submit_button("📅 Цаг захиалах"):
+                if b_reason:
+                    try:
+                        u_info = get_student_info(st.session_state.current_user)
+                        u_grade = f"{u_info.get('Анги', '')}-{u_info.get('Бүлэг', '')}"
+                        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        
+                        # 1. Google Sheets-д хадгалах
+                        sheet_bookings.append_row([
+                            st.session_state.current_user,
+                            str(b_date),
+                            str(b_time),
+                            b_reason,
+                            u_grade,
+                            now_str
+                        ])
+                        
+                        # 2. Telegram руу Сэтгэл зүйчид мэдэгдэл илгээх
+                        msg = f"📅 **ШИНЭ ЦАГ ЗАХИАЛГА!**\n\n👤 **Хэрэглэгч:** {st.session_state.current_user} ({u_grade})\n📆 **Захиалсан огноо:** {b_date}\n⏰ **Цаг:** {b_time}\n📝 **Шалтгаан:** {b_reason}"
+                        send_telegram_alert(st.session_state.current_user, u_info.get("Утас", "Бүртгэлгүй"), msg)
+                        
+                        st.success(f"Амжилттай! Таны захиалсан {b_date}-ний {b_time} цагийн хүсэлт сэтгэл зүйчид илгээгдлээ.")
+                    except Exception as e:
+                        st.error(f"Алдаа гарлаа: {e}")
+                else:
+                    st.warning("Уулзах шалтгаанаа товч бичнэ үү.")
 
     # --- ❓ ТУСЛАМЖ ---
     elif menu == "❓ Тусламж":
