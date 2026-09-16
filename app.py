@@ -19,6 +19,8 @@ try:
     gc = gspread.authorize(credentials)
 
     spreadsheet = gc.open("FourMind_Data")
+    
+    # Үндсэн хуудсуудыг холбох
     sheet_users = spreadsheet.worksheet("users")
     sheet_results = spreadsheet.worksheet("results")
     
@@ -48,11 +50,14 @@ try:
     except Exception:
         sheet_courses = spreadsheet.add_worksheet(title="courses", rows="100", cols="6")
         sheet_courses.append_row(["Гарчиг", "Таргет", "Хичээлийн_холбоос", "Тайлбар", "Үүсгэсэн_огноо"])
+
+    # Цаг захиалга хадгалах хуудас
     try:
         sheet_bookings = spreadsheet.worksheet("bookings")
     except Exception:
         sheet_bookings = spreadsheet.add_worksheet(title="bookings", rows="100", cols="7")
         sheet_bookings.append_row(["Хэрэглэгч", "Огноо", "Цаг", "Уулзах_шалтгаан", "Анги", "Бүртгэсэн_огноо"])
+
 except Exception as e:
     st.error(f"Google Sheets холболтын алдаа: {e}")
 
