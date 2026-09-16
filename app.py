@@ -593,6 +593,41 @@ else:
                         st.success(f"Амжилттай хадгалагдлаа! Таны өнөөдрийн голлон мэдэрсэн мэдрэмж: **{analyzed_state}** байна.")
                     except Exception as e:
                         st.error(f"Хадгалахад алдаа гарлаа: {e}")
+    # --- 📊 ҮР ДҮН ХЭСЭГ ---
+    elif menu == "📊 Үр дүн":
+        st.title("📊 Сэтгэл зүйн сорил & Тестийн үр дүнгүүд")
+        
+        try:
+            res_records = sheet_results.get_all_records()
+            if res_records:
+                df_res = pd.DataFrame(res_records)
+                
+                # Хэрэв Сурагч нэвтэрсэн байвал зөвхөн өөрийнхөө үр дүнг харна
+                if st.session_state.user_role == "Сурагч":
+                    st.subheader(f"👤 {st.session_state.current_user} таны өгсөн тестийн түүх:")
+                    if "Нэр" in df_res.columns:
+                        my_res = df_res[df_res["Нэр"].astype(str) == str(st.session_state.current_user)]
+                        if not my_res.empty:
+                            st.dataframe(my_res)
+                        else:
+                            st.info("Та одоогоор ямар нэгэн тест бөглөөгүй байна.")
+                    else:
+                        st.dataframe(df_res)
+                        
+                # Хэрэв Админ эсвэл Багш нэвтэрсэн байвал бүх/хариуцсан сурагчдын үр дүнг харна
+                else:
+                    st.subheader("📋 Бүх сурагчдын бөглөсөн тестийн нэгдсэн үр дүн:")
+                    if st.session_state.user_role == "Анги удирдсан багш":
+                        t_grade = str(st.session_state.user_grade or "")
+                        t_group = str(st.session_state.user_group or "")
+                        if "Анги" in df_res.columns and "Бүлэг" in df_res.columns:
+                            df_res = df_res[(df_res["Анги"].astype(str) == t_grade) & (df_res["Бүлэг"].astype(str) == t_group)]
+                    
+                    st.dataframe(df_res)
+            else:
+                st.info("Одоогоор ямар нэгэн тестийн үр дүн хадгалагдаагүй байна.")
+        except Exception as e:
+            st.error(f"Үр дүн татахад алдаа гарлаа: {e}")
 
     # --- 📈 СУДАЛГАА БОЛОН АНАЛИЗ ---
     elif menu == "📈 Судалгаа болон Анализ":
