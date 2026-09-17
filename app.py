@@ -19,8 +19,6 @@ try:
     gc = gspread.authorize(credentials)
 
     spreadsheet = gc.open("FourMind_Data")
-    
-    # Үндсэн хуудсуудыг холбох
     sheet_users = spreadsheet.worksheet("users")
     sheet_results = spreadsheet.worksheet("results")
     
@@ -50,13 +48,6 @@ try:
     except Exception:
         sheet_courses = spreadsheet.add_worksheet(title="courses", rows="100", cols="6")
         sheet_courses.append_row(["Гарчиг", "Таргет", "Хичээлийн_холбоос", "Тайлбар", "Үүсгэсэн_огноо"])
-
-    # Цаг захиалга хадгалах хуудас
-    try:
-        sheet_bookings = spreadsheet.worksheet("bookings")
-    except Exception:
-        sheet_bookings = spreadsheet.add_worksheet(title="bookings", rows="100", cols="7")
-        sheet_bookings.append_row(["Хэрэглэгч", "Огноо", "Цаг", "Уулзах_шалтгаан", "Анги", "Бүртгэсэн_огноо"])
 
 except Exception as e:
     st.error(f"Google Sheets холболтын алдаа: {e}")
@@ -111,7 +102,7 @@ def send_telegram_alert(student_name, phone_number, message_text):
         st.error(f"Telegram мэдэгдэл илгээхэд алдаа гарлаа: {e}")
         return False
 
-# --- 4. МЭДРЭМЖИЙН АНАЛИЗ ХИЙХ ФУНКЦ ---
+# --- 4. МЭДРЭМЖИЙН АНАЛИЗ БОЛОН ТУСЛАХ ФУНКЦҮҮД ---
 def analyze_feeling(text_input, selected_mood):
     text_lower = text_input.lower()
     if any(w in text_lower for w in ["ядарч", "цуцаж", "унтмаар", "сульдаж"]):
@@ -127,11 +118,15 @@ def analyze_feeling(text_input, selected_mood):
     else:
         return selected_mood
 
-def get_student_info(username):
+def get_student_info(identifier):
+    """Сурагчийн нэр эсвэл Утасны дугаараар мэдээллийг хайна"""
     try:
         all_users = sheet_users.get_all_records()
+        identifier_str = str(identifier).strip()
         for u in all_users:
-            if str(u.get("Нэр", "")).strip() == username.strip():
+            u_name = str(u.get("Нэр", "")).strip()
+            u_phone = str(u.get("Утасны дугаар") or u.get("Утас") or "").strip()
+            if u_name == identifier_str or u_phone == identifier_str:
                 return u
     except Exception:
         pass
@@ -147,6 +142,8 @@ def calculate_verification_code(phone_num):
 # --- 5. SESSION STATE ---
 if "current_user" not in st.session_state:
     st.session_state.current_user = None
+if "user_phone" not in st.session_state:
+    st.session_state.user_phone = None
 if "user_role" not in st.session_state:
     st.session_state.user_role = None
 if "user_grade" not in st.session_state:
@@ -188,11 +185,11 @@ if st.session_state.current_user is None:
     
     with tab1:
         st.subheader("Системд нэвтрэх")
-        l_name = st.text_input("Хэрэглэгчийн нэр:", key="login_username")
+        l_input = st.text_input("Хэрэглэгчийн нэр эсвэл Утасны дугаар:", key="login_username")
         l_pass = st.text_input("Нууц үг:", type="password", key="login_pass_field")
         
         if st.button("Нэвтрэх", key="login_submit_btn"):
-            if l_name and l_pass:
+            if l_input and l_pass:
                 try:
                     all_rows = sheet_users.get_all_values()
                     user_found = None
@@ -204,8 +201,10 @@ if st.session_state.current_user is None:
                             u_name = str(row[0]).strip()
                             u_pass = str(row[1]).strip()
                             u_role = str(row[2]).strip()
+                            u_phone = str(row[4]).strip() if len(row) > 4 else ""
                             
-                            if u_name == l_name.strip() and u_pass == l_pass.strip():
+                            # Нэр эсвэл Утасны дугаар таарч байгаа эсэхийг шалгана
+                            if (u_name == l_input.strip() or u_phone == l_input.strip()) and u_pass == l_pass.strip():
                                 u_status = str(row[8]).strip() if len(row) > 8 else "Идэвхтэй"
                                 if u_status == "Төгссөн":
                                     st.error("❌ Энэ бүртгэл сургууль төгссөн тул идэвхгүй болсон байна.")
@@ -213,6 +212,7 @@ if st.session_state.current_user is None:
                                 
                                 user_found = {
                                     "Нэр": u_name, 
+                                    "Утас": u_phone,
                                     "Үүрэг": u_role if u_role else "Сурагч",
                                     "Анги": row[6] if len(row) > 6 else "",
                                     "Бүлэг": row[7] if len(row) > 7 else "",
@@ -222,6 +222,7 @@ if st.session_state.current_user is None:
                     
                     if user_found:
                         st.session_state.current_user = user_found["Нэр"]
+                        st.session_state.user_phone = user_found["Утас"]
                         st.session_state.user_role = user_found["Үүрэг"]
                         st.session_state.user_grade = user_found["Анги"]
                         st.session_state.user_group = user_found["Бүлэг"]
@@ -229,7 +230,7 @@ if st.session_state.current_user is None:
                         st.success(f"Амжилттай нэвтэрлээ! Таны эрх: {user_found['Үүрэг']}")
                         st.rerun()
                     else:
-                        st.error("Хэрэглэгчийн нэр эсвэл нууц үг буруу байна.")
+                        st.error("Хэрэглэгчийн нэр/утас эсвэл нууц үг буруу байна.")
                 except Exception as e:
                     st.error(f"Нэвтрэхэд алдаа гарлаа: {e}")
             else:
@@ -243,7 +244,7 @@ if st.session_state.current_user is None:
         password = st.text_input("Нууц үг үүсгэх:", type="password", key="reg_pass_field")
         age = st.number_input("Нас:", min_value=6, max_value=100, value=15, step=1, key="reg_age")
         gender = st.selectbox("Хүйс:", ["Эрэгтэй", "Эмэгтэй"], key="reg_gender")
-        phone = st.text_input("Өөрийн утасны дугаар:", key="reg_phone")
+        phone = st.text_input("Өөрийн утасны дугаар (Давтагдашгүй ID болох тул үнэн зөв оруулна уу):", key="reg_phone")
         
         child_phone_input, reg_grade, reg_group = "", "", ""
         
@@ -284,6 +285,8 @@ else:
 
         st.markdown("### **FourMind**")
         st.caption(f"👤 **{st.session_state.current_user}** ({st.session_state.user_role})")
+        if st.session_state.user_phone:
+            st.caption(f"📞 **Утас:** {st.session_state.user_phone}")
         if st.session_state.user_grade and st.session_state.user_group:
             st.caption(f"🏫 **Анги бүлэг:** {st.session_state.user_grade}-{st.session_state.user_group}")
         st.divider()
@@ -306,6 +309,7 @@ else:
         st.divider()
         if st.button("🚪 Гарах"):
             st.session_state.current_user = None
+            st.session_state.user_phone = None
             st.session_state.user_role = None
             st.session_state.user_grade = None
             st.session_state.user_group = None
@@ -327,7 +331,6 @@ else:
     elif menu == "🎓 Зайн сургалт":
         st.title("🎓 Зайн сэтгэл зүйн сургалтууд & Батламж")
         
-        # Админ сургалт оруулах хэсэг
         if st.session_state.user_role == "Админ":
             with st.expander("➕ Шинэ зайн сургалт нэмэх (Админ хэсэг)"):
                 c_title = st.text_input("Сургалтын сэдэв / Гарчиг:")
@@ -347,7 +350,6 @@ else:
                         st.warning("Гарчиг болон линкийг заавал оруулна уу.")
             st.divider()
 
-        # Сургалтуудыг харуулах
         try:
             courses = sheet_courses.get_all_records()
             filtered_courses = [c for c in courses if c.get("Таргет") in ["Бүгдэд", st.session_state.user_role]]
@@ -363,7 +365,6 @@ else:
                     else:
                         st.markdown(f"🔗 [Энд дарж хичээл үзнэ үү]({link})")
                     
-                    # Батламж авах хэсэг
                     if st.button(f"📜 'Course #{idx+1}' Сургалт дуусгаж Батламж авах", key=f"cert_btn_{idx}"):
                         today_str = datetime.now().strftime("%Y-%m-%d")
                         st.balloons()
@@ -471,12 +472,12 @@ else:
             except Exception as e:
                 st.error(f"Алдаа гарлаа: {e}")
 
-    # --- ⚙️ АДМИНЫ ТЕСТ УДИРДЛАГА ХЭСЭГ ---
+    # --- ⚙️ АДМИНЫ ТЕСТ УДИРДЛАГА (ҮҮСГЭХ / УСТГАХ) ---
     elif menu == "⚙️ Тест удирдлага (Админ)":
         st.title("⚙️ Админы тест болон асуулга удирдах хэсэг")
         st.info("Энд админ шинэ тест оруулах бөгөөд оруулангуут '🧪 Тестүүд' хэсэгт автоматаар харагдана.")
         
-        tab_add, tab_list = st.tabs(["➕ Шинэ тест нэмэх", "📋 Үүсгэсэн тестүүдийн жагсаалт"])
+        tab_add, tab_list = st.tabs(["➕ Шинэ тест нэмэх", "📋 Удирдах & 🗑️ Устгах"])
         
         with tab_add:
             with st.form("admin_create_test"):
@@ -492,6 +493,7 @@ else:
                                 t_name, t_type, t_question, t_options, datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             ])
                             st.success("✅ Шинэ тест амжилттай хадгалагдлаа!")
+                            st.rerun()
                         except Exception as e:
                             st.error(f"Хадгалахад алдаа гарлаа: {e}")
                     else:
@@ -502,7 +504,52 @@ else:
                 tests_data = sheet_tests.get_all_records()
                 if tests_data:
                     df_tests = pd.DataFrame(tests_data)
+                    st.subheader("📋 Нийт үүсгэсэн тестүүдийн жагсаалт:")
                     st.dataframe(df_tests)
+                    st.divider()
+
+                    st.subheader("🗑️ Буруу оруулсан тест болон асуултыг устгах")
+                    unique_tests = list(set([t.get("Тестийн нэр") for t in tests_data if t.get("Тестийн нэр")]))
+                    
+                    if unique_tests:
+                        selected_delete_test = st.selectbox("Устгах тестээ сонгоно уу:", unique_tests)
+                        
+                        col_del1, col_del2 = st.columns(2)
+                        with col_del1:
+                            if st.button(f"🗑️ '{selected_delete_test}' Тестийг бүхэлд нь устгах", type="primary"):
+                                try:
+                                    all_rows = sheet_tests.get_all_values()
+                                    new_rows = [all_rows[0]]  # Header
+                                    for row in all_rows[1:]:
+                                        if row and row[0] != selected_delete_test:
+                                            new_rows.append(row)
+                                    
+                                    sheet_tests.clear()
+                                    sheet_tests.update("A1", new_rows)
+                                    st.success(f"✅ '{selected_delete_test}' тест амжилттай устгагдлаа!")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Устгахад алдаа гарлаа: {e}")
+                        
+                        with col_del2:
+                            test_questions = [t.get("Асуулт") for t in tests_data if t.get("Тестийн нэр") == selected_delete_test]
+                            selected_q = st.selectbox("Сонгосон тестээс зөвхөн тодорхой нэг асуултыг устгах:", test_questions)
+                            if st.button("🗑️ Сонгосон асуултыг устгах"):
+                                try:
+                                    all_rows = sheet_tests.get_all_values()
+                                    new_rows = [all_rows[0]]
+                                    for row in all_rows[1:]:
+                                        if row:
+                                            if row[0] == selected_delete_test and row[2] == selected_q:
+                                                continue
+                                            new_rows.append(row)
+                                    
+                                    sheet_tests.clear()
+                                    sheet_tests.update("A1", new_rows)
+                                    st.success("✅ Сонгосон асуулт амжилттай устгагдлаа!")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Асуулт устгахад алдаа гарлаа: {e}")
                 else:
                     st.write("Одоогоор шинээр үүсгэсэн тест байхгүй байна.")
             except Exception as e:
@@ -544,10 +591,11 @@ else:
                     submit_test = st.form_submit_button("📤 Тест дуусгах & Хадгалах")
                     
                     if submit_test:
-                        student_info = get_student_info(st.session_state.current_user)
-                        user_phone = str(student_info.get("Утасны дугаар") or student_info.get("Утас") or "")
-                        user_grade = str(student_info.get("Анги", ""))
-                        user_group = str(student_info.get("Бүлэг", ""))
+                        # Утасны дугаар эсвэл нэрээр сурагчийн мэдээллийг татна
+                        student_info = get_student_info(st.session_state.user_phone or st.session_state.current_user)
+                        user_phone = str(student_info.get("Утасны дугаар") or student_info.get("Утас") or st.session_state.user_phone or "")
+                        user_grade = str(student_info.get("Анги", st.session_state.user_grade or ""))
+                        user_group = str(student_info.get("Бүлэг", st.session_state.user_group or ""))
 
                         if "🔒 Заавал" in test_type:
                             expected_code = calculate_verification_code(user_phone)
@@ -582,9 +630,9 @@ else:
                 analyzed_state = analyze_feeling(diary_text, selected_mood)
                 if sheet_feelings:
                     try:
-                        student_info = get_student_info(st.session_state.current_user)
-                        user_grade = str(student_info.get("Анги", ""))
-                        user_group = str(student_info.get("Бүлэг", ""))
+                        student_info = get_student_info(st.session_state.user_phone or st.session_state.current_user)
+                        user_grade = str(student_info.get("Анги", st.session_state.user_grade or ""))
+                        user_group = str(student_info.get("Бүлэг", st.session_state.user_group or ""))
                         
                         sheet_feelings.append_row([
                             st.session_state.current_user, selected_mood, analyzed_state,
@@ -593,41 +641,6 @@ else:
                         st.success(f"Амжилттай хадгалагдлаа! Таны өнөөдрийн голлон мэдэрсэн мэдрэмж: **{analyzed_state}** байна.")
                     except Exception as e:
                         st.error(f"Хадгалахад алдаа гарлаа: {e}")
-    # --- 📊 ҮР ДҮН ХЭСЭГ ---
-    elif menu == "📊 Үр дүн":
-        st.title("📊 Сэтгэл зүйн сорил & Тестийн үр дүнгүүд")
-        
-        try:
-            res_records = sheet_results.get_all_records()
-            if res_records:
-                df_res = pd.DataFrame(res_records)
-                
-                # Хэрэв Сурагч нэвтэрсэн байвал зөвхөн өөрийнхөө үр дүнг харна
-                if st.session_state.user_role == "Сурагч":
-                    st.subheader(f"👤 {st.session_state.current_user} таны өгсөн тестийн түүх:")
-                    if "Нэр" in df_res.columns:
-                        my_res = df_res[df_res["Нэр"].astype(str) == str(st.session_state.current_user)]
-                        if not my_res.empty:
-                            st.dataframe(my_res)
-                        else:
-                            st.info("Та одоогоор ямар нэгэн тест бөглөөгүй байна.")
-                    else:
-                        st.dataframe(df_res)
-                        
-                # Хэрэв Админ эсвэл Багш нэвтэрсэн байвал бүх/хариуцсан сурагчдын үр дүнг харна
-                else:
-                    st.subheader("📋 Бүх сурагчдын бөглөсөн тестийн нэгдсэн үр дүн:")
-                    if st.session_state.user_role == "Анги удирдсан багш":
-                        t_grade = str(st.session_state.user_grade or "")
-                        t_group = str(st.session_state.user_group or "")
-                        if "Анги" in df_res.columns and "Бүлэг" in df_res.columns:
-                            df_res = df_res[(df_res["Анги"].astype(str) == t_grade) & (df_res["Бүлэг"].astype(str) == t_group)]
-                    
-                    st.dataframe(df_res)
-            else:
-                st.info("Одоогоор ямар нэгэн тестийн үр дүн хадгалагдаагүй байна.")
-        except Exception as e:
-            st.error(f"Үр дүн татахад алдаа гарлаа: {e}")
 
     # --- 📈 СУДАЛГАА БОЛОН АНАЛИЗ ---
     elif menu == "📈 Судалгаа болон Анализ":
@@ -709,78 +722,12 @@ else:
     # --- 📅 ЦАГ ЗАХИАЛГА ---
     elif menu == "📅 Цаг захиалга":
         st.title("📅 Сэтгэл зүйн ганцаарчилсан зөвлөгөөний цаг захиалах")
-        
-        # 1. Google Sheet-ээс бүх боломжит өдөр, цагийг унших
-        all_schedules = []
-        try:
-            sched_records = sheet_schedule.get_all_records()
-            for r in sched_records:
-                day = str(r.get("Боломжит_өдөр", "")).strip()
-                time_slot = str(r.get("Боломжит_цаг", "")).strip()
-                if day and time_slot:
-                    all_schedules.append((day, time_slot))
-        except Exception as e:
-            st.error(f"Цагийн хуваарь татахад алдаа гарлаа: {e}")
-
-        # 2. Нэгэнт захиалагдсан өдөр, цагуудыг авч шүүх
-        booked_slots = set()
-        try:
-            booking_records = sheet_bookings.get_all_records()
-            for b in booking_records:
-                b_day = str(b.get("Огноо", "")).strip()
-                b_time = str(b.get("Цаг", "")).strip()
-                if b_day and b_time:
-                    booked_slots.add((b_day, b_time))
-        except Exception as e:
-            pass # Захиалгын хуудас хоосон байвал алдаа мэдээлэхгүй
-
-        # 3. Боломжит цагуудаас аль хэдийн захиалагдсан цагуудыг хасах
-        available_slots = [slot for slot in all_schedules if slot not in booked_slots]
-
-        if not available_slots:
-            st.warning("⚠️ Одоогоор боломжит цагийн хуваарь байхгүй эсвэл бүх цаг захиалагдсан байна.")
-        else:
-            # Боломжтой өдрүүдийг ялгах
-            unique_days = sorted(list(set([slot[0] for slot in available_slots])))
-            
-            with st.form("booking_form"):
-                st.subheader("Сэтгэл зүйчийн боломжтой цагуудаас сонгох:")
-                
-                selected_day = st.selectbox("Боломжит өдөр сонгох:", unique_days)
-                
-                # Сонгосон өдөрт тохирох, БОЛОМЖТОЙ (захиалагдаагүй) цагуудыг харуулах
-                day_times = [slot[1] for slot in available_slots if slot[0] == selected_day]
-                selected_time = st.selectbox("Боломжит цаг сонгох:", day_times)
-                
-                b_reason = st.text_area("Уулзах шалтгаан / Товч утга:", placeholder="Уулзах болсон шалтгаанаа товч бичнэ үү...")
-                
-                if st.form_submit_button("📅 Цаг захиалах"):
-                    if b_reason:
-                        try:
-                            u_info = get_student_info(st.session_state.current_user)
-                            u_grade = f"{u_info.get('Анги', '')}-{u_info.get('Бүлэг', '')}"
-                            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            
-                            # 1. Google Sheets дээр захиалга хадгалах
-                            sheet_bookings.append_row([
-                                st.session_state.current_user,
-                                str(selected_day),
-                                str(selected_time),
-                                b_reason,
-                                u_grade,
-                                now_str
-                            ])
-                            
-                            # 2. Telegram дээр мэдэгдэл очих
-                            msg = f"📅 **ШИНЭ ЦАГ ЗАХИАЛГА!**\n\n👤 **Хэрэглэгч:** {st.session_state.current_user} ({u_grade})\n📆 **Захиалсан өдөр:** {selected_day}\n⏰ **Цаг:** {selected_time}\n📝 **Шалтгаан:** {b_reason}"
-                            send_telegram_alert(st.session_state.current_user, u_info.get("Утас", "Бүртгэлгүй"), msg)
-                            
-                            st.success(f"Амжилттай! Таны захиалсан {selected_day}-ний {selected_time} цагийн хүсэлт баталгаажлаа.")
-                            st.rerun() # Хуудсыг шинэчилж, сонгосон цагийг сонголтоос шууд хасна
-                        except Exception as e:
-                            st.error(f"Алдаа гарлаа: {e}")
-                    else:
-                        st.warning("Уулзах шалтгаанаа товч бичнэ үү.")
+        with st.form("booking_form"):
+            b_date = st.date_input("Огноо сонгох:")
+            b_time = st.time_input("Цаг сонгох:")
+            b_reason = st.text_area("Уулзах шалтгаан / Товч утга:")
+            if st.form_submit_button("📅 Цагаа баталгаажуулах"):
+                st.success(f"Амжилттай! {b_date}-ний {b_time} цагт цаг захиаллаа.")
 
     # --- ❓ ТУСЛАМЖ ---
     elif menu == "❓ Тусламж":
@@ -788,7 +735,7 @@ else:
         st.warning("Яаралтай мэргэжлийн дэмжлэг шаардлагатай үед доорх маягтыг бөглөнө үү.")
         
         with st.form("sos_form"):
-            contact_phone = st.text_input("Холбоо барих утасны дугаар:")
+            contact_phone = st.text_input("Холбоо барих утасны дугаар:", value=st.session_state.user_phone or "")
             sos_message = st.text_area("Мэдээлэл / Нөхцөл байдал:")
             
             if st.form_submit_button("🚨 Тусламжийн хүсэлтээ илгээх"):
@@ -807,6 +754,7 @@ else:
     elif menu == "⚙️ Тохиргоо":
         st.title("⚙️ Хэрэглэгчийн тохиргоо")
         st.write(f"**Хэрэглэгчийн нэр:** {st.session_state.current_user}")
+        st.write(f"**Утасны дугаар:** {st.session_state.user_phone}")
         st.write(f"**Эрх:** {st.session_state.user_role}")
         if st.session_state.user_grade and st.session_state.user_group:
             st.write(f"**Анги бүлэг:** {st.session_state.user_grade}-{st.session_state.user_group}")
@@ -824,7 +772,11 @@ else:
                         all_users = sheet_users.get_all_records()
                         user_row_idx = None
                         for idx, u in enumerate(all_users, start=2):
-                            if str(u.get("Нэр", "")).strip() == st.session_state.current_user.strip():
+                            u_name = str(u.get("Нэр", "")).strip()
+                            u_phone = str(u.get("Утасны дугаар") or u.get("Утас") or "").strip()
+                            
+                            # Яг одоо нэвтэрсэн сурагчийг Нэр болон Утасны дугаараар нь тулгалж олно
+                            if (u_name == st.session_state.current_user and u_phone == st.session_state.user_phone):
                                 if str(u.get("Нууц үг", "")).strip() == old_p.strip():
                                     user_row_idx = idx
                                     break
